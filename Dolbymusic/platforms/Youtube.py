@@ -242,14 +242,18 @@ class YouTubeAPI:
         else:
             try:
                 if not YOUTUBE_SEARCH_AVAILABLE:
+                    print("WARNING: youtube-search-python not available!")
                     raise Exception("youtube-search-python not available")
                 from youtubesearchpython import VideosSearch
+                print(f"Searching YouTube for: {query}")
                 search = VideosSearch(query, limit=1)
                 results = search.result()
+                print(f"Search results: {results}")
                 if not results or "result" not in results or not results["result"]:
                     raise Exception("No YouTube results found")
                 first = results["result"][0]
                 link = first.get("link")
+                print(f"Found link: {link}")
             except Exception as e:
                 print(f"Failed to search YouTube: {e}")
                 return {
