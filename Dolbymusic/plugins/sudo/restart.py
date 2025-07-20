@@ -31,8 +31,16 @@ async def is_heroku():
 @language
 async def log_(client, message, _):
     try:
-        await message.reply_document(document="log.txt")
-    except:
+        if os.path.exists("log.txt"):
+            await message.reply_document(document="log.txt")
+        else:
+            await message.reply_text("📄 Log file not found. Creating empty log file...")
+            # Create empty log file
+            with open("log.txt", "w") as f:
+                f.write("No logs available yet.\n")
+            await message.reply_document(document="log.txt")
+    except Exception as e:
+        await message.reply_text(f"❌ Error accessing log file: {str(e)}")
         await message.reply_text(_["server_1"])
 
 
