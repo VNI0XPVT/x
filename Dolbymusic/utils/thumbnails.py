@@ -7,7 +7,7 @@ import aiohttp
 import numpy as np
 
 from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageFont
-from youtubesearchpython.__future__ import VideosSearch
+from youtubesearchpython import VideosSearch
 
 from config import YOUTUBE_IMG_URL
 from Dolbymusic import app
@@ -33,15 +33,21 @@ def add_corners(im):
 
 
 async def gen_thumb(videoid, user_id):
-    # Ensure cache directory exists
-    os.makedirs("cache", exist_ok=True)
+    # Ensure cache directory exists with safe path handling
+    try:
+        from Dolbymusic.utils.heroku_utils import get_safe_cache_path, safe_file_path
+        cache_dir = get_safe_cache_path()
+    except ImportError:
+        cache_dir = "cache"
+        os.makedirs(cache_dir, exist_ok=True)
     
-    if os.path.isfile(f"cache/{videoid}_{user_id}.png"):
-        return f"cache/{videoid}_{user_id}.png"
+    cache_file = os.path.join(cache_dir, f"{videoid}_{user_id}.png")
+    if os.path.isfile(cache_file):
+        return cache_file
     url = f"https://www.youtube.com/watch?v={videoid}"
     try:
         results = VideosSearch(url, limit=1)
-        search_results = await results.next()
+        search_results = results.result()
         
         for result in search_results["result"]:
             try:
