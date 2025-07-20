@@ -281,9 +281,20 @@ async def play_commnd(
             details, track_id = await YouTube.track(query)
             print(f"YouTube track search result - Details: {details}, Track ID: {track_id}")
             
-            # Validate that we got valid track details
-            if not details or not details.get("vidid") or not details.get("link"):
-                print(f"Invalid track details returned for query: {query}")
+            # More detailed validation with debugging
+            if not details:
+                print(f"No details returned for query: {query}")
+                return await mystic.edit_text(_["play_3"])
+            
+            vidid = details.get("vidid")
+            link = details.get("link") 
+            title = details.get("title")
+            
+            print(f"Extracted - VidID: {vidid}, Link: {link}, Title: {title}")
+            
+            # Check if we have at least a video ID or a link
+            if not vidid and not link:
+                print(f"No video ID or link found for query: {query}")
                 return await mystic.edit_text(_["play_3"])
                 
         except Exception as err:
@@ -394,3 +405,4 @@ async def play_commnd(
                     reply_markup=InlineKeyboardMarkup(buttons),
                 )
                 return await play_logs(message, streamtype=f"URL Searched Inline")
+
