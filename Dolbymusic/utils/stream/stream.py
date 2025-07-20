@@ -30,6 +30,8 @@ async def stream(
     spotify: Union[bool, str] = None,
     forceplay: Union[bool, str] = None,
 ):
+    print(f"Stream called with streamtype: {streamtype}, result: {result}")
+    
     if not result:
         return
     if forceplay:
@@ -138,6 +140,13 @@ async def stream(
         title = result.get("title", "Unknown Title")
         duration_min = result.get("duration_min", "0:00")
         thumbnail = result.get("thumb") or result.get("thumbnail", "")
+        
+        # Validate that we have a valid link and video ID
+        print(f"Stream processing - Link: {link}, VidID: {vidid}, Title: {title}")
+        
+        if not link or not vidid:
+            print(f"Invalid stream data - Link: {link}, VidID: {vidid}")
+            raise AssistantErr(_["play_14"])
         
         # Safely handle title formatting
         if title and isinstance(title, str):
