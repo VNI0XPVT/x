@@ -144,9 +144,14 @@ async def stream(
         # Validate that we have a valid link and video ID
         print(f"Stream processing - Link: {link}, VidID: {vidid}, Title: {title}")
         
-        if not link or not vidid:
-            print(f"Invalid stream data - Link: {link}, VidID: {vidid}")
+        # More flexible validation - we need either a link or vidid
+        if not link and not vidid:
+            print(f"No link or video ID provided - Link: {link}, VidID: {vidid}")
             raise AssistantErr(_["play_14"])
+        
+        # If we have vidid but no link, we can still proceed
+        if vidid and not link:
+            print(f"Using video ID without full link: {vidid}")
         
         # Safely handle title formatting
         if title and isinstance(title, str):
@@ -156,8 +161,10 @@ async def stream(
             
         status = True if video else None
         try:
+            # Use vidid if available, otherwise use link
+            download_target = vidid if vidid else link
             file_path, direct = await YouTube.download(
-                vidid, mystic, videoid=True, video=status
+                download_target, mystic, videoid=bool(vidid), video=status
             )
             # Verify file_path is valid
             if not file_path or file_path == "None" or not isinstance(file_path, str):
