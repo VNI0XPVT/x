@@ -114,7 +114,35 @@ def sync_download(video_id, audio=True):
         url = f"https://www.youtube.com/watch?v={video_id}"
         print(f"Attempting to download: {url}")
         
-        yt = PyTubeYT(url)
+        # Try multiple approaches to avoid bot detection
+        yt = None
+        approaches = [
+            # Approach 1: Use po_token and WEB client
+            lambda: PyTubeYT(url, use_po_token=True, client='WEB'),
+            # Approach 2: Use WEB client without po_token
+            lambda: PyTubeYT(url, client='WEB'),
+            # Approach 3: Use different client (ANDROID)
+            lambda: PyTubeYT(url, client='ANDROID'),
+            # Approach 4: Default approach
+            lambda: PyTubeYT(url)
+        ]
+        
+        last_error = None
+        for i, approach in enumerate(approaches, 1):
+            try:
+                print(f"Trying approach {i}...")
+                yt = approach()
+                # Test if we can access basic properties
+                _ = yt.title
+                print(f"Approach {i} successful!")
+                break
+            except Exception as e:
+                print(f"Approach {i} failed: {e}")
+                last_error = e
+                continue
+        
+        if yt is None:
+            raise Exception(f"All download approaches failed. Last error: {last_error}")
         
         # Get safe download directory
         downloads_dir = get_safe_download_path()
@@ -198,8 +226,33 @@ class YouTubeAPI:
                 raise Exception("pytubefix not available")
             from pytubefix import YouTube as PyTubeYT
             
-            # Try PyTube first - it's more flexible than our regex
-            yt = PyTubeYT(link)
+            # Try multiple approaches to avoid bot detection
+            yt = None
+            approaches = [
+                # Approach 1: Use po_token and WEB client
+                lambda: PyTubeYT(link, use_po_token=True, client='WEB'),
+                # Approach 2: Use WEB client without po_token
+                lambda: PyTubeYT(link, client='WEB'),
+                # Approach 3: Use different client (ANDROID)
+                lambda: PyTubeYT(link, client='ANDROID'),
+                # Approach 4: Default approach
+                lambda: PyTubeYT(link)
+            ]
+            
+            last_error = None
+            for i, approach in enumerate(approaches, 1):
+                try:
+                    yt = approach()
+                    # Test if we can access basic properties
+                    _ = yt.title
+                    break
+                except Exception as e:
+                    last_error = e
+                    continue
+            
+            if yt is None:
+                raise Exception(f"All approaches failed. Last error: {last_error}")
+            
             title = yt.title or "Unknown Title"
             duration_sec = getattr(yt, "length", None)
             
@@ -413,7 +466,34 @@ class YouTubeAPI:
         """Synchronous helper for getting formats"""
         try:
             from pytubefix import YouTube as PyTubeYT
-            yt = PyTubeYT(link)
+            
+            # Try multiple approaches to avoid bot detection
+            yt = None
+            approaches = [
+                # Approach 1: Use po_token and WEB client
+                lambda: PyTubeYT(link, use_po_token=True, client='WEB'),
+                # Approach 2: Use WEB client without po_token
+                lambda: PyTubeYT(link, client='WEB'),
+                # Approach 3: Use different client (ANDROID)
+                lambda: PyTubeYT(link, client='ANDROID'),
+                # Approach 4: Default approach
+                lambda: PyTubeYT(link)
+            ]
+            
+            last_error = None
+            for i, approach in enumerate(approaches, 1):
+                try:
+                    yt = approach()
+                    # Test if we can access basic properties
+                    _ = yt.title
+                    break
+                except Exception as e:
+                    last_error = e
+                    continue
+            
+            if yt is None:
+                raise Exception(f"All approaches failed. Last error: {last_error}")
+            
             formats_available = []
             
             for stream in yt.streams:
