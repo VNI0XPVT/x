@@ -28,6 +28,37 @@ def cleanup_old_downloads():
     except:
         pass  # Ignore cleanup errors
 
+def validate_youtube_video_id(video_id):
+    """Validate YouTube video ID format"""
+    if not video_id or not isinstance(video_id, str):
+        return False
+    # YouTube video IDs are exactly 11 characters, alphanumeric plus - and _
+    if len(video_id) != 11:
+        return False
+    # Check if it contains only valid characters
+    valid_chars = re.match(r'^[a-zA-Z0-9_-]+$', video_id)
+    return bool(valid_chars)
+
+def extract_video_id_from_url(url):
+    """Extract video ID from YouTube URL safely"""
+    if not url or not isinstance(url, str):
+        return None
+    
+    # Handle different YouTube URL formats
+    patterns = [
+        r'(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})',
+        r'youtube\.com\/.*[?&]v=([a-zA-Z0-9_-]{11})'
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            video_id = match.group(1)
+            if validate_youtube_video_id(video_id):
+                return video_id
+    
+    return None
+
 # Register cleanup function to run on exit
 atexit.register(cleanup_old_downloads)
 
@@ -76,7 +107,13 @@ def sync_download(video_id, audio=True):
             return os.path.join(get_safe_download_path(), filename)
     
     try:
+        # Validate video_id first
+        if not validate_youtube_video_id(video_id):
+            raise Exception(f"Invalid YouTube video ID: {video_id}")
+        
         url = f"https://www.youtube.com/watch?v={video_id}"
+        print(f"Attempting to download: {url}")
+        
         yt = PyTubeYT(url)
         
         # Get safe download directory
@@ -160,6 +197,12 @@ class YouTubeAPI:
             if not PYTUBEFIX_AVAILABLE:
                 raise Exception("pytubefix not available")
             from pytubefix import YouTube as PyTubeYT
+            
+            # Try to extract video ID from URL first for validation
+            extracted_id = extract_video_id_from_url(link)
+            if not extracted_id:
+                raise Exception(f"Could not extract valid video ID from URL: {link}")
+            
             yt = PyTubeYT(link)
             title = yt.title or "Unknown Title"
             duration_sec = getattr(yt, "length", None)
@@ -179,6 +222,12 @@ class YouTubeAPI:
             
             thumbnail = yt.thumbnail_url
             vidid = yt.video_id
+            
+            # Validate video ID
+            if not validate_youtube_video_id(vidid):
+                print(f"Invalid video ID extracted: {vidid}")
+                return None, None, None, None, None
+                
             return title, duration_min, duration_sec, thumbnail, vidid
         except Exception as e:
             print(f"Failed to fetch details: {e}")
