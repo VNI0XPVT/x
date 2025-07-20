@@ -261,7 +261,10 @@ class YouTubeAPI:
                 }, None
         
         title, duration_min, duration_sec, thumbnail, vidid = await self.details(link)
+        print(f"Track details - Link: {link}, Video ID: {vidid}, Title: {title}")
+        
         if not vidid:
+            print(f"No video ID found for link: {link}")
             return {
                 "title": None,
                 "link": None,
@@ -351,17 +354,31 @@ class YouTubeAPI:
             if videoid:
                 video_id = str(link)
             else:
-                # Extract video ID from URL
-                if "&" in link:
-                    link = link.split("&")[0]
-                url_data = urlparse(link)
-                if url_data.hostname and "youtube" in url_data.hostname:
-                    query = parse_qs(url_data.query)
-                    video_id = query.get("v", [None])[0]
-                elif url_data.hostname == "youtu.be":
-                    video_id = url_data.path[1:]
-                else:
-                    video_id = link
+                # Extract video ID from URL using our enhanced function
+                video_id = extract_video_id_from_url(link)
+                
+                # Fallback to original logic if extract function fails
+                if not video_id:
+                    if "&" in link:
+                        link = link.split("&")[0]
+                    url_data = urlparse(link)
+                    if url_data.hostname and "youtube" in url_data.hostname:
+                        query = parse_qs(url_data.query)
+                        potential_id = query.get("v", [None])[0]
+                        if validate_youtube_video_id(potential_id):
+                            video_id = potential_id
+                    elif url_data.hostname == "youtu.be":
+                        potential_id = url_data.path[1:]
+                        if validate_youtube_video_id(potential_id):
+                            video_id = potential_id
+                    else:
+                        # Last resort - assume the link is a video ID
+                        if validate_youtube_video_id(link):
+                            video_id = link
+
+            # Final validation check
+            if not video_id or not validate_youtube_video_id(video_id):
+                return 0, f"Could not extract valid video ID from: {link}"
 
             if not PYTUBEFIX_AVAILABLE:
                 return 0, "pytubefix not available"
@@ -427,20 +444,38 @@ class YouTubeAPI:
     ) -> tuple:
         """Download audio/video from YouTube"""
         try:
+            print(f"Download called with - Link: {link}, VideoID: {videoid}")
+            
             if videoid:
                 video_id = str(link)
             else:
-                # Extract video ID from URL
-                if "&" in link:
-                    link = link.split("&")[0]
-                url_data = urlparse(link)
-                if url_data.hostname and "youtube" in url_data.hostname:
-                    query = parse_qs(url_data.query)
-                    video_id = query.get("v", [None])[0]
-                elif url_data.hostname == "youtu.be":
-                    video_id = url_data.path[1:]
-                else:
-                    video_id = link
+                # Extract video ID from URL using our enhanced function
+                video_id = extract_video_id_from_url(link)
+                
+                # Fallback to original logic if extract function fails
+                if not video_id:
+                    if "&" in link:
+                        link = link.split("&")[0]
+                    url_data = urlparse(link)
+                    if url_data.hostname and "youtube" in url_data.hostname:
+                        query = parse_qs(url_data.query)
+                        potential_id = query.get("v", [None])[0]
+                        if validate_youtube_video_id(potential_id):
+                            video_id = potential_id
+                    elif url_data.hostname == "youtu.be":
+                        potential_id = url_data.path[1:]
+                        if validate_youtube_video_id(potential_id):
+                            video_id = potential_id
+                    else:
+                        # Last resort - assume the link is a video ID
+                        if validate_youtube_video_id(link):
+                            video_id = link
+
+            print(f"Extracted video ID: {video_id}")
+            
+            # Final validation check
+            if not video_id or not validate_youtube_video_id(video_id):
+                raise Exception(f"Could not extract valid video ID from: {link}")
 
             if not PYTUBEFIX_AVAILABLE:
                 raise Exception("pytubefix not available")
