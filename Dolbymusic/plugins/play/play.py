@@ -279,6 +279,13 @@ async def play_commnd(
             query = query.replace("-v", "")
         try:
             details, track_id = await YouTube.track(query)
+            print(f"YouTube track search result - Details: {details}, Track ID: {track_id}")
+            
+            # Validate that we got valid track details
+            if not details or not details.get("vidid") or not details.get("link"):
+                print(f"Invalid track details returned for query: {query}")
+                return await mystic.edit_text(_["play_3"])
+                
         except Exception as err:
             logging.error("Exception in YouTube.track for slider: %s", err, exc_info=True)
             return await mystic.edit_text(_["play_3"])
@@ -387,4 +394,3 @@ async def play_commnd(
                     reply_markup=InlineKeyboardMarkup(buttons),
                 )
                 return await play_logs(message, streamtype=f"URL Searched Inline")
-
