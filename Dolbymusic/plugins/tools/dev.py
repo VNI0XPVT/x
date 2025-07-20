@@ -73,8 +73,12 @@ async def executor(client: app, message: Message):
     final_output = f"<b>⥤ ʀᴇsᴜʟᴛ :</b>\n<pre language='python'>{evaluation}</pre>"
     if len(final_output) > 4096:
         filename = "output.txt"
-        with open(filename, "w+", encoding="utf8") as out_file:
-            out_file.write(str(evaluation))
+        try:
+            with open(filename, "w+", encoding="utf8") as out_file:
+                out_file.write(str(evaluation))
+        except Exception as e:
+            await message.reply_text(f"❌ Error creating output file: {str(e)}")
+            return
         t2 = time()
         keyboard = InlineKeyboardMarkup(
             [
