@@ -2,8 +2,34 @@ import re
 import os
 import asyncio
 import functools
+import tempfile
+import atexit
+import glob
 from typing import Union
 from urllib.parse import urlparse, parse_qs
+
+# Cleanup function for downloaded files
+def cleanup_old_downloads():
+    """Clean up old downloaded files to save disk space"""
+    try:
+        downloads_dir = os.path.join(os.getcwd(), "downloads")
+        if os.path.exists(downloads_dir):
+            # Remove files older than 1 hour
+            import time
+            current_time = time.time()
+            for filepath in glob.glob(os.path.join(downloads_dir, "*")):
+                if os.path.isfile(filepath):
+                    file_age = current_time - os.path.getctime(filepath)
+                    if file_age > 3600:  # 1 hour in seconds
+                        try:
+                            os.remove(filepath)
+                        except:
+                            pass  # Ignore errors during cleanup
+    except:
+        pass  # Ignore cleanup errors
+
+# Register cleanup function to run on exit
+atexit.register(cleanup_old_downloads)
 
 try:
     from pytubefix import YouTube, Playlist
@@ -36,20 +62,50 @@ async def get_file_with_pytubefix(video_id, audio=True):
 
 def sync_download(video_id, audio=True):
     from pytubefix import YouTube as PyTubeYT
-    url = f"https://www.youtube.com/watch?v={video_id}"
-    yt = PyTubeYT(url)
-    os.makedirs("downloads", exist_ok=True)
-    if audio:
-        stream = yt.streams.filter(only_audio=True).first()
-        ext = "mp3"
-    else:
-        stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
-        ext = "mp4"
-    if stream is None:
-        raise Exception("No suitable stream found for download")
-    file_path = f"downloads/{video_id}.{ext}"
-    stream.download(output_path="downloads", filename=f"{video_id}.{ext}")
-    return file_path
+    try:
+        # Import Heroku utilities
+        from Dolbymusic.utils.heroku_utils import get_safe_download_path, safe_file_path
+    except ImportError:
+        # Fallback if heroku_utils not available
+        def get_safe_download_path():
+            downloads_dir = os.path.join(os.getcwd(), "downloads")
+            os.makedirs(downloads_dir, exist_ok=True)
+            return downloads_dir
+        
+        def safe_file_path(filename):
+            return os.path.join(get_safe_download_path(), filename)
+    
+    try:
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        yt = PyTubeYT(url)
+        
+        # Get safe download directory
+        downloads_dir = get_safe_download_path()
+        
+        if audio:
+            stream = yt.streams.filter(only_audio=True).first()
+            ext = "mp3"
+        else:
+            stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
+            ext = "mp4"
+            
+        if stream is None:
+            raise Exception("No suitable stream found for download")
+            
+        # Use safe file path
+        filename = f"{video_id}.{ext}"
+        file_path = safe_file_path(filename)
+        
+        # Download with error handling
+        stream.download(output_path=downloads_dir, filename=filename)
+        
+        # Verify file was created
+        if not os.path.exists(file_path):
+            raise Exception(f"Download failed - file not created: {file_path}")
+            
+        return file_path
+    except Exception as e:
+        raise Exception(f"Download error: {str(e)}")
 
 class YouTubeAPI:
     def __init__(self):
