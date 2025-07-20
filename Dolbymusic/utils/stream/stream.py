@@ -133,11 +133,18 @@ async def stream(
                 reply_markup=upl,
             )
     elif streamtype == "youtube":
-        link = result["link"]
-        vidid = result["vidid"]
-        title = (result["title"]).title()
-        duration_min = result["duration_min"]
-        thumbnail = result["thumb"]
+        link = result.get("link", "")
+        vidid = result.get("vidid", "")
+        title = result.get("title", "Unknown Title")
+        duration_min = result.get("duration_min", "0:00")
+        thumbnail = result.get("thumb") or result.get("thumbnail", "")
+        
+        # Safely handle title formatting
+        if title and isinstance(title, str):
+            title = title.title()
+        else:
+            title = "Unknown Title"
+            
         status = True if video else None
         try:
             file_path, direct = await YouTube.download(
@@ -256,10 +263,17 @@ async def stream(
             db[chat_id][0]["mystic"] = run
             db[chat_id][0]["markup"] = "tg"
     elif streamtype == "telegram":
-        file_path = result["path"]
-        link = result["link"]
-        title = (result["title"]).title()
-        duration_min = result["dur"]
+        file_path = result.get("path", "")
+        link = result.get("link", "")
+        title = result.get("title", "Unknown Title")
+        duration_min = result.get("dur", "0:00")
+        
+        # Safely handle title formatting
+        if title and isinstance(title, str):
+            title = title.title()
+        else:
+            title = "Unknown File"
+            
         status = True if video else None
         if await is_active_chat(chat_id):
             await put_queue(
@@ -310,11 +324,18 @@ async def stream(
             db[chat_id][0]["mystic"] = run
             db[chat_id][0]["markup"] = "tg"
     elif streamtype == "live":
-        link = result["link"]
-        vidid = result["vidid"]
-        title = (result["title"]).title()
-        thumbnail = result["thumb"]
+        link = result.get("link", "")
+        vidid = result.get("vidid", "")
+        title = result.get("title", "Unknown Title")
+        thumbnail = result.get("thumb") or result.get("thumbnail", "")
         duration_min = "Live Track"
+        
+        # Safely handle title formatting
+        if title and isinstance(title, str):
+            title = title.title()
+        else:
+            title = "Unknown Live Stream"
+            
         status = True if video else None
         if await is_active_chat(chat_id):
             await put_queue(
