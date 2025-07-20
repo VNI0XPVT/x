@@ -130,14 +130,14 @@ def sync_download(video_id, audio=True):
         last_error = None
         for i, approach in enumerate(approaches, 1):
             try:
-                print(f"Trying approach {i}...")
+                print(f"Download trying approach {i}...")
                 yt = approach()
                 # Test if we can access basic properties
                 _ = yt.title
-                print(f"Approach {i} successful!")
+                print(f"Download approach {i} successful!")
                 break
             except Exception as e:
-                print(f"Approach {i} failed: {e}")
+                print(f"Download approach {i} failed: {e}")
                 last_error = e
                 continue
         
@@ -242,11 +242,14 @@ class YouTubeAPI:
             last_error = None
             for i, approach in enumerate(approaches, 1):
                 try:
+                    print(f"Details trying approach {i}...")
                     yt = approach()
                     # Test if we can access basic properties
                     _ = yt.title
+                    print(f"Details approach {i} successful!")
                     break
                 except Exception as e:
+                    print(f"Details approach {i} failed: {e}")
                     last_error = e
                     continue
             
@@ -483,11 +486,14 @@ class YouTubeAPI:
             last_error = None
             for i, approach in enumerate(approaches, 1):
                 try:
+                    print(f"Formats trying approach {i}...")
                     yt = approach()
                     # Test if we can access basic properties
                     _ = yt.title
+                    print(f"Formats approach {i} successful!")
                     break
                 except Exception as e:
+                    print(f"Formats approach {i} failed: {e}")
                     last_error = e
                     continue
             
