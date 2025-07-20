@@ -150,7 +150,13 @@ async def stream(
             file_path, direct = await YouTube.download(
                 vidid, mystic, videoid=True, video=status
             )
-        except:
+            # Verify file_path is valid
+            if not file_path or file_path == "None" or not isinstance(file_path, str):
+                raise Exception(f"Invalid file path returned: {file_path}")
+            if not os.path.exists(file_path):
+                raise Exception(f"Downloaded file does not exist: {file_path}")
+        except Exception as download_error:
+            print(f"Download failed: {download_error}")
             raise AssistantErr(_["play_14"])
         if await is_active_chat(chat_id):
             await put_queue(
