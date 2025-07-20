@@ -1,1 +1,1 @@
-python3 -m Dolbymusic 
+python3 heroku_start.py 
