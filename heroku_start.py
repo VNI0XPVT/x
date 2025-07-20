@@ -73,8 +73,14 @@ if __name__ == "__main__":
     if setup_heroku_environment():
         # Import and start the bot
         try:
-            import Dolbymusic
-            print("✅ Bot started successfully!")
+            print("🎵 Starting DolbyMusic bot...")
+            # Import the main module and run it
+            import asyncio
+            from Dolbymusic.__main__ import init
+            
+            # Run the bot's main function
+            asyncio.get_event_loop().run_until_complete(init())
+            
         except Exception as e:
             print(f"❌ Error starting bot: {e}")
             import traceback
