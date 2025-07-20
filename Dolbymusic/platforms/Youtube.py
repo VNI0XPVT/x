@@ -39,11 +39,11 @@ except ImportError:
     print("Warning: pytubefix not available, YouTube functionality may be limited")
 
 try:
-    from youtubesearchpython.__future__ import VideosSearch
+    from youtubesearchpython import VideosSearch
     YOUTUBE_SEARCH_AVAILABLE = True
 except ImportError:
     YOUTUBE_SEARCH_AVAILABLE = False
-    print("Warning: youtubesearchpython not available, search functionality may be limited")
+    print("Warning: youtube-search-python not available, search functionality may be limited")
 
 YOUTUBE_URL_RE = re.compile(
     r'^(https?://)?(www\.)?(youtube\.com|youtu\.be)/.+$'
@@ -193,10 +193,10 @@ class YouTubeAPI:
         else:
             try:
                 if not YOUTUBE_SEARCH_AVAILABLE:
-                    raise Exception("youtubesearchpython not available")
-                from youtubesearchpython.__future__ import VideosSearch
+                    raise Exception("youtube-search-python not available")
+                from youtubesearchpython import VideosSearch
                 search = VideosSearch(query, limit=1)
-                results = await search.next()
+                results = search.result()
                 if not results or "result" not in results or not results["result"]:
                     raise Exception("No YouTube results found")
                 first = results["result"][0]
@@ -262,10 +262,10 @@ class YouTubeAPI:
     async def slider(self, query: str, query_type: int, videoid: Union[bool, str] = None):
         try:
             if not YOUTUBE_SEARCH_AVAILABLE:
-                raise Exception("youtubesearchpython not available")
-            from youtubesearchpython.__future__ import VideosSearch
+                raise Exception("youtube-search-python not available")
+            from youtubesearchpython import VideosSearch
             search = VideosSearch(query, limit=10)
-            results = await search.next()
+            results = search.result()
             if not results or "result" not in results or not results["result"]:
                 raise Exception("No YouTube results found")
             result = results["result"]
