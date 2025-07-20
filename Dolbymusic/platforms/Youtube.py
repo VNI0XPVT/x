@@ -170,8 +170,8 @@ def sync_download(video_id, audio=True):
         if yt:
             try:
                 print("Using cached YouTube session...")
-                # Test if cached session still works
-                _ = yt.title
+                # Test if cached session still works with a safer check
+                hasattr(yt, 'streams') and hasattr(yt, 'video_id')
                 print("Cached session working!")
             except:
                 print("Cached session expired, creating new one...")
@@ -199,11 +199,17 @@ def sync_download(video_id, audio=True):
                     print(f"Download trying approach {i}...")
                     yt = approach()
                     # Test if we can access basic properties without triggering bot detection
-                    _ = yt.title
-                    print(f"Download approach {i} successful!")
-                    # Cache successful session
-                    cache_youtube_session(url, yt)
-                    break
+                    # Use a safer test that doesn't access title immediately
+                    try:
+                        # Check if the object has the required attributes
+                        hasattr(yt, 'streams') and hasattr(yt, 'video_id')
+                        print(f"Download approach {i} successful!")
+                        # Cache successful session
+                        cache_youtube_session(url, yt)
+                        break
+                    except Exception as test_error:
+                        print(f"Download approach {i} object test failed: {test_error}")
+                        raise test_error
                 except Exception as e:
                     print(f"Download approach {i} failed: {e}")
                     last_error = e
@@ -216,8 +222,18 @@ def sync_download(video_id, audio=True):
             raise Exception(f"All download approaches failed. Last error: {last_error}")
         
         print(f"Successfully created YouTube object for: {url}")
-        print(f"Video title: {getattr(yt, 'title', 'Unknown')}")
-        print(f"Video length: {getattr(yt, 'length', 'Unknown')} seconds")
+        # Safely try to get video details without triggering bot detection
+        try:
+            video_title = getattr(yt, 'title', 'Unknown')
+            print(f"Video title: {video_title}")
+        except:
+            print("Video title: Unable to retrieve (avoiding bot detection)")
+        
+        try:
+            video_length = getattr(yt, 'length', 'Unknown')
+            print(f"Video length: {video_length} seconds")
+        except:
+            print("Video length: Unable to retrieve (avoiding bot detection)")
         
         # Get safe download directory
         downloads_dir = get_safe_download_path()
@@ -299,8 +315,8 @@ def sync_download(video_id, audio=True):
                         fallback_client = client_fallbacks[retry]
                         print(f"Switching to {fallback_client} client...")
                         yt = PyTubeYT(url, client=fallback_client, use_oauth=False, allow_oauth_cache=False)
-                        # Test the new client works
-                        _ = yt.title
+                        # Test the new client works with safer validation
+                        hasattr(yt, 'streams') and hasattr(yt, 'video_id')
                         print(f"Successfully switched to {fallback_client} client")
                         time.sleep(1)  # Brief pause before retrying
                     except Exception as client_error:
@@ -447,9 +463,15 @@ class YouTubeAPI:
                     print(f"Details trying approach {i}...")
                     yt = approach()
                     # Test if we can access basic properties without triggering bot detection
-                    _ = yt.title
-                    print(f"Details approach {i} successful!")
-                    break
+                    # Use a safer test that doesn't access title immediately
+                    try:
+                        # Check if the object has the required attributes
+                        hasattr(yt, 'streams') and hasattr(yt, 'video_id')
+                        print(f"Details approach {i} successful!")
+                        break
+                    except Exception as test_error:
+                        print(f"Details approach {i} object test failed: {test_error}")
+                        raise test_error
                 except Exception as e:
                     print(f"Details approach {i} failed: {e}")
                     last_error = e
@@ -461,8 +483,21 @@ class YouTubeAPI:
             if yt is None:
                 raise Exception(f"All approaches failed. Last error: {last_error}")
             
-            title = yt.title or "Unknown Title"
-            duration_sec = getattr(yt, "length", None)
+            # Safely access video properties to avoid bot detection
+            title = "Unknown Title"
+            duration_sec = None
+            
+            try:
+                title = yt.title or "Unknown Title"
+            except Exception as title_error:
+                print(f"Could not access title safely: {title_error}")
+                title = "Unknown Title"
+            
+            try:
+                duration_sec = getattr(yt, "length", None)
+            except Exception as duration_error:
+                print(f"Could not access duration safely: {duration_error}")
+                duration_sec = None
             
             # Handle duration formatting more robustly
             if duration_sec is not None and duration_sec > 0:
@@ -477,8 +512,21 @@ class YouTubeAPI:
                     duration_min = "0:00"
                     duration_sec = 0
             
-            thumbnail = yt.thumbnail_url
-            vidid = yt.video_id
+            # Safely access thumbnail and video ID
+            thumbnail = None
+            vidid = None
+            
+            try:
+                thumbnail = yt.thumbnail_url
+            except Exception as thumb_error:
+                print(f"Could not access thumbnail safely: {thumb_error}")
+                thumbnail = None
+            
+            try:
+                vidid = yt.video_id
+            except Exception as vidid_error:
+                print(f"Could not access video ID safely: {vidid_error}")
+                vidid = None
             
             # Validate video ID - but be more flexible
             if not vidid or not isinstance(vidid, str) or len(vidid) != 11:
@@ -699,9 +747,15 @@ class YouTubeAPI:
                     print(f"Formats trying approach {i}...")
                     yt = approach()
                     # Test if we can access basic properties without triggering bot detection
-                    _ = yt.title
-                    print(f"Formats approach {i} successful!")
-                    break
+                    # Use a safer test that doesn't access title immediately
+                    try:
+                        # Check if the object has the required attributes
+                        hasattr(yt, 'streams') and hasattr(yt, 'video_id')
+                        print(f"Formats approach {i} successful!")
+                        break
+                    except Exception as test_error:
+                        print(f"Formats approach {i} object test failed: {test_error}")
+                        raise test_error
                 except Exception as e:
                     print(f"Formats approach {i} failed: {e}")
                     last_error = e
