@@ -105,12 +105,22 @@ class YouTubeAPI:
                 raise Exception("pytubefix not available")
             from pytubefix import YouTube as PyTubeYT
             yt = PyTubeYT(link)
-            title = yt.title
+            title = yt.title or "Unknown Title"
             duration_sec = getattr(yt, "length", None)
-            if duration_sec is not None:
+            
+            # Handle duration formatting more robustly
+            if duration_sec is not None and duration_sec > 0:
                 duration_min = f"{duration_sec // 60}:{duration_sec % 60:02d}"
             else:
-                duration_min = None
+                # Check if this might be a live stream
+                if title and ("live" in title.lower() or "streaming" in title.lower() or "🔴" in title):
+                    duration_min = "Live"
+                    duration_sec = 0
+                else:
+                    # Default for videos with unknown duration
+                    duration_min = "0:00"
+                    duration_sec = 0
+            
             thumbnail = yt.thumbnail_url
             vidid = yt.video_id
             return title, duration_min, duration_sec, thumbnail, vidid
@@ -155,8 +165,21 @@ class YouTubeAPI:
                 "thumb": None
             }, None
         
+        # If duration_min is None but we have duration_sec, create duration_min
+        if duration_min is None and duration_sec is not None and duration_sec > 0:
+            duration_min = f"{duration_sec // 60}:{duration_sec % 60:02d}"
+        
+        # For live streams or videos without duration, set a default
+        if duration_min is None:
+            # Try to detect if it's actually a live stream
+            if title and ("live" in title.lower() or "streaming" in title.lower()):
+                duration_min = "Live"
+            else:
+                # Default duration for regular videos that might have missing duration info
+                duration_min = "0:00"
+        
         track_details = {
-            "title": title,
+            "title": title or "Unknown Title",
             "link": link,
             "vidid": vidid,
             "duration_min": duration_min,
