@@ -21,7 +21,6 @@ spotipy
 tgcrypto
 unidecode
 pytubefix
-youtube-search
-youtube-search-python
+youtubesearchpython
 pyrofork
 httpx==0.23.3
