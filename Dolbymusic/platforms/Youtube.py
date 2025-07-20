@@ -93,6 +93,9 @@ async def get_file_with_pytubefix(video_id, audio=True):
 
 def sync_download(video_id, audio=True):
     from pytubefix import YouTube as PyTubeYT
+    import random
+    import time
+    
     try:
         # Import Heroku utilities
         from Dolbymusic.utils.heroku_utils import get_safe_download_path, safe_file_path
@@ -114,18 +117,16 @@ def sync_download(video_id, audio=True):
         url = f"https://www.youtube.com/watch?v={video_id}"
         print(f"Attempting to download: {url}")
         
-        # Try multiple approaches to avoid bot detection
+        # Try multiple approaches to avoid bot detection with randomization
         yt = None
-        approaches = [
-            # Approach 1: Use po_token and WEB client
-            lambda: PyTubeYT(url, use_po_token=True, client='WEB'),
-            # Approach 2: Use WEB client without po_token
-            lambda: PyTubeYT(url, client='WEB'),
-            # Approach 3: Use different client (ANDROID)
-            lambda: PyTubeYT(url, client='ANDROID'),
-            # Approach 4: Default approach
-            lambda: PyTubeYT(url)
-        ]
+        client_types = ['WEB', 'ANDROID', 'IOS', 'MWEB']
+        random.shuffle(client_types)  # Randomize order to avoid predictable patterns
+        
+        approaches = []
+        for client in client_types:
+            approaches.append(lambda c=client: PyTubeYT(url, client=c))
+        # Add default as fallback
+        approaches.append(lambda: PyTubeYT(url))
         
         last_error = None
         for i, approach in enumerate(approaches, 1):
@@ -139,6 +140,9 @@ def sync_download(video_id, audio=True):
             except Exception as e:
                 print(f"Download approach {i} failed: {e}")
                 last_error = e
+                # Add a small delay between attempts to avoid rate limiting
+                import time
+                time.sleep(1)
                 continue
         
         if yt is None:
@@ -225,19 +229,19 @@ class YouTubeAPI:
             if not PYTUBEFIX_AVAILABLE:
                 raise Exception("pytubefix not available")
             from pytubefix import YouTube as PyTubeYT
+            import random
+            import time
             
-            # Try multiple approaches to avoid bot detection
+            # Try multiple approaches to avoid bot detection with randomization
             yt = None
-            approaches = [
-                # Approach 1: Use po_token and WEB client
-                lambda: PyTubeYT(link, use_po_token=True, client='WEB'),
-                # Approach 2: Use WEB client without po_token
-                lambda: PyTubeYT(link, client='WEB'),
-                # Approach 3: Use different client (ANDROID)
-                lambda: PyTubeYT(link, client='ANDROID'),
-                # Approach 4: Default approach
-                lambda: PyTubeYT(link)
-            ]
+            client_types = ['WEB', 'ANDROID', 'IOS', 'MWEB']
+            random.shuffle(client_types)  # Randomize order to avoid predictable patterns
+            
+            approaches = []
+            for client in client_types:
+                approaches.append(lambda c=client: PyTubeYT(link, client=c))
+            # Add default as fallback
+            approaches.append(lambda: PyTubeYT(link))
             
             last_error = None
             for i, approach in enumerate(approaches, 1):
@@ -251,6 +255,9 @@ class YouTubeAPI:
                 except Exception as e:
                     print(f"Details approach {i} failed: {e}")
                     last_error = e
+                    # Add a small delay between attempts to avoid rate limiting
+                    import time
+                    time.sleep(1)
                     continue
             
             if yt is None:
@@ -473,13 +480,15 @@ class YouTubeAPI:
             # Try multiple approaches to avoid bot detection
             yt = None
             approaches = [
-                # Approach 1: Use po_token and WEB client
-                lambda: PyTubeYT(link, use_po_token=True, client='WEB'),
-                # Approach 2: Use WEB client without po_token
+                # Approach 1: Use WEB client with user agent spoofing
                 lambda: PyTubeYT(link, client='WEB'),
-                # Approach 3: Use different client (ANDROID)
+                # Approach 2: Use ANDROID client
                 lambda: PyTubeYT(link, client='ANDROID'),
-                # Approach 4: Default approach
+                # Approach 3: Use IOS client
+                lambda: PyTubeYT(link, client='IOS'),
+                # Approach 4: Use MWEB (Mobile Web) client
+                lambda: PyTubeYT(link, client='MWEB'),
+                # Approach 5: Default approach
                 lambda: PyTubeYT(link)
             ]
             
