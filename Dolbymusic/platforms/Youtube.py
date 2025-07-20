@@ -402,8 +402,9 @@ class YouTubeAPI:
             
             return file_path, True
         except Exception as e:
-            print(f"Failed to download: {e}")
-            return None, False
+            error_msg = f"Failed to download {video_id}: {e}"
+            print(error_msg)
+            raise Exception(error_msg)  # Raise exception instead of returning None
 
 YouTube = YouTubeAPI()
 
