@@ -5,8 +5,53 @@ import functools
 import tempfile
 import atexit
 import glob
+import time
+import random
 from typing import Union
 from urllib.parse import urlparse, parse_qs
+
+# Global session cache for bot detection avoidance
+_youtube_session_cache = {}
+_last_request_time = 0
+
+def get_cached_youtube_session(url, max_age=300):
+    """Get cached YouTube session if available and not too old"""
+    global _youtube_session_cache, _last_request_time
+    current_time = time.time()
+    
+    # Clean old sessions
+    expired_keys = [k for k, v in _youtube_session_cache.items() 
+                   if current_time - v['created'] > max_age]
+    for key in expired_keys:
+        del _youtube_session_cache[key]
+    
+    # Check if we have a recent session
+    if url in _youtube_session_cache:
+        session_data = _youtube_session_cache[url]
+        if current_time - session_data['created'] < max_age:
+            return session_data['client']
+    
+    return None
+
+def cache_youtube_session(url, client):
+    """Cache YouTube session for reuse"""
+    global _youtube_session_cache
+    _youtube_session_cache[url] = {
+        'client': client,
+        'created': time.time()
+    }
+
+def enforce_rate_limit(min_delay=1.0):
+    """Enforce minimum delay between requests"""
+    global _last_request_time
+    current_time = time.time()
+    time_since_last = current_time - _last_request_time
+    
+    if time_since_last < min_delay:
+        sleep_time = min_delay - time_since_last
+        time.sleep(sleep_time)
+    
+    _last_request_time = time.time()
 
 # Cleanup function for downloaded files
 def cleanup_old_downloads():
@@ -117,33 +162,55 @@ def sync_download(video_id, audio=True):
         url = f"https://www.youtube.com/watch?v={video_id}"
         print(f"Attempting to download: {url}")
         
-        # Try multiple approaches to avoid bot detection with randomization
-        yt = None
-        client_types = ['WEB', 'ANDROID', 'IOS', 'MWEB']
-        random.shuffle(client_types)  # Randomize order to avoid predictable patterns
+        # Enforce rate limiting to avoid triggering bot detection
+        enforce_rate_limit(1.5)
         
-        approaches = []
-        for client in client_types:
-            approaches.append(lambda c=client: PyTubeYT(url, client=c))
-        # Add default as fallback
-        approaches.append(lambda: PyTubeYT(url))
-        
-        last_error = None
-        for i, approach in enumerate(approaches, 1):
+        # Check for cached session first
+        yt = get_cached_youtube_session(url)
+        if yt:
             try:
-                print(f"Download trying approach {i}...")
-                yt = approach()
-                # Test if we can access basic properties
+                print("Using cached YouTube session...")
+                # Test if cached session still works
                 _ = yt.title
-                print(f"Download approach {i} successful!")
-                break
-            except Exception as e:
-                print(f"Download approach {i} failed: {e}")
-                last_error = e
-                # Add a small delay between attempts to avoid rate limiting
-                import time
-                time.sleep(1)
-                continue
+                print("Cached session working!")
+            except:
+                print("Cached session expired, creating new one...")
+                yt = None
+        
+        if yt is None:
+            # Try multiple approaches to avoid bot detection with randomization
+            client_types = ['WEB', 'ANDROID', 'IOS', 'MWEB']
+            random.shuffle(client_types)  # Randomize order to avoid predictable patterns
+            
+            # Create more sophisticated approaches with different parameters
+            approaches = []
+            for client in client_types:
+                approaches.append(lambda c=client: PyTubeYT(url, client=c, use_oauth=False, allow_oauth_cache=False))
+            
+            # Add approaches with different user agents and settings
+            approaches.extend([
+                lambda: PyTubeYT(url, use_oauth=False, allow_oauth_cache=False),
+                lambda: PyTubeYT(url, client='WEB', use_oauth=False, allow_oauth_cache=False)
+            ])
+            
+            last_error = None
+            for i, approach in enumerate(approaches, 1):
+                try:
+                    print(f"Download trying approach {i}...")
+                    yt = approach()
+                    # Test if we can access basic properties without triggering bot detection
+                    _ = yt.title
+                    print(f"Download approach {i} successful!")
+                    # Cache successful session
+                    cache_youtube_session(url, yt)
+                    break
+                except Exception as e:
+                    print(f"Download approach {i} failed: {e}")
+                    last_error = e
+                    # Add a progressive delay between attempts
+                    import time
+                    time.sleep(min(i * 0.5, 3))  # Progressive delay up to 3 seconds
+                    continue
         
         if yt is None:
             raise Exception(f"All download approaches failed. Last error: {last_error}")
@@ -151,12 +218,33 @@ def sync_download(video_id, audio=True):
         # Get safe download directory
         downloads_dir = get_safe_download_path()
         
-        if audio:
-            stream = yt.streams.filter(only_audio=True).first()
-            ext = "mp3"
-        else:
-            stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
-            ext = "mp4"
+        # Try to get streams with retry mechanism
+        stream = None
+        for retry in range(3):
+            try:
+                if audio:
+                    stream = yt.streams.filter(only_audio=True).first()
+                    ext = "mp3"
+                else:
+                    stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
+                    ext = "mp4"
+                break
+            except Exception as e:
+                print(f"Stream access attempt {retry + 1} failed: {e}")
+                if retry < 2:  # Don't sleep on last attempt
+                    time.sleep(2)
+                    # Try recreating YouTube object with different client
+                    if retry == 0:
+                        try:
+                            yt = PyTubeYT(url, client='ANDROID')
+                        except:
+                            pass
+                    elif retry == 1:
+                        try:
+                            yt = PyTubeYT(url, client='IOS')
+                        except:
+                            pass
+                continue
             
         if stream is None:
             raise Exception("No suitable stream found for download")
@@ -237,27 +325,32 @@ class YouTubeAPI:
             client_types = ['WEB', 'ANDROID', 'IOS', 'MWEB']
             random.shuffle(client_types)  # Randomize order to avoid predictable patterns
             
+            # Create more sophisticated approaches with different parameters
             approaches = []
             for client in client_types:
-                approaches.append(lambda c=client: PyTubeYT(link, client=c))
-            # Add default as fallback
-            approaches.append(lambda: PyTubeYT(link))
+                approaches.append(lambda c=client: PyTubeYT(link, client=c, use_oauth=False, allow_oauth_cache=False))
+            
+            # Add approaches with different user agents and settings
+            approaches.extend([
+                lambda: PyTubeYT(link, use_oauth=False, allow_oauth_cache=False),
+                lambda: PyTubeYT(link, client='WEB', use_oauth=False, allow_oauth_cache=False)
+            ])
             
             last_error = None
             for i, approach in enumerate(approaches, 1):
                 try:
                     print(f"Details trying approach {i}...")
                     yt = approach()
-                    # Test if we can access basic properties
+                    # Test if we can access basic properties without triggering bot detection
                     _ = yt.title
                     print(f"Details approach {i} successful!")
                     break
                 except Exception as e:
                     print(f"Details approach {i} failed: {e}")
                     last_error = e
-                    # Add a small delay between attempts to avoid rate limiting
+                    # Add a progressive delay between attempts
                     import time
-                    time.sleep(1)
+                    time.sleep(min(i * 0.5, 3))  # Progressive delay up to 3 seconds
                     continue
             
             if yt is None:
@@ -476,34 +569,39 @@ class YouTubeAPI:
         """Synchronous helper for getting formats"""
         try:
             from pytubefix import YouTube as PyTubeYT
+            import random
+            import time
             
             # Try multiple approaches to avoid bot detection
             yt = None
-            approaches = [
-                # Approach 1: Use WEB client with user agent spoofing
-                lambda: PyTubeYT(link, client='WEB'),
-                # Approach 2: Use ANDROID client
-                lambda: PyTubeYT(link, client='ANDROID'),
-                # Approach 3: Use IOS client
-                lambda: PyTubeYT(link, client='IOS'),
-                # Approach 4: Use MWEB (Mobile Web) client
-                lambda: PyTubeYT(link, client='MWEB'),
-                # Approach 5: Default approach
-                lambda: PyTubeYT(link)
-            ]
+            client_types = ['WEB', 'ANDROID', 'IOS', 'MWEB']
+            random.shuffle(client_types)  # Randomize order
+            
+            # Create more sophisticated approaches with different parameters
+            approaches = []
+            for client in client_types:
+                approaches.append(lambda c=client: PyTubeYT(link, client=c, use_oauth=False, allow_oauth_cache=False))
+            
+            # Add approaches with different settings
+            approaches.extend([
+                lambda: PyTubeYT(link, use_oauth=False, allow_oauth_cache=False),
+                lambda: PyTubeYT(link, client='WEB', use_oauth=False, allow_oauth_cache=False)
+            ])
             
             last_error = None
             for i, approach in enumerate(approaches, 1):
                 try:
                     print(f"Formats trying approach {i}...")
                     yt = approach()
-                    # Test if we can access basic properties
+                    # Test if we can access basic properties without triggering bot detection
                     _ = yt.title
                     print(f"Formats approach {i} successful!")
                     break
                 except Exception as e:
                     print(f"Formats approach {i} failed: {e}")
                     last_error = e
+                    # Add progressive delay
+                    time.sleep(min(i * 0.5, 3))
                     continue
             
             if yt is None:
