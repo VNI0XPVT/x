@@ -12,7 +12,7 @@
 # CMD bash start
 
 
-FROM nikolaik/python-nodejs:python3.11-nodejs19
+FROM nikolaik/python-nodejs:python3.10-nodejs19
 
 # Use Debian archive for Buster
 RUN sed -i 's/deb.debian.org\/debian/archive.debian.org\/debian/g' /etc/apt/sources.list \
