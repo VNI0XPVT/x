@@ -59,8 +59,15 @@ async def alpha_to_int(user_id_alphabet: str) -> int:
 
 
 def time_to_seconds(time):
-    stringt = str(time)
-    return sum(int(x) * 60**i for i, x in enumerate(reversed(stringt.split(":"))))
+    if time is None or time == "None" or time == "Live":
+        return 0
+    try:
+        stringt = str(time).strip()
+        if not stringt or stringt == "0:00":
+            return 0
+        return sum(int(x) * 60**i for i, x in enumerate(reversed(stringt.split(":"))))
+    except (ValueError, AttributeError, IndexError):
+        return 0
 
 
 def seconds_to_min(seconds):
