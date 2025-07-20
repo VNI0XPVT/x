@@ -215,39 +215,144 @@ def sync_download(video_id, audio=True):
         if yt is None:
             raise Exception(f"All download approaches failed. Last error: {last_error}")
         
+        print(f"Successfully created YouTube object for: {url}")
+        print(f"Video title: {getattr(yt, 'title', 'Unknown')}")
+        print(f"Video length: {getattr(yt, 'length', 'Unknown')} seconds")
+        
         # Get safe download directory
         downloads_dir = get_safe_download_path()
         
-        # Try to get streams with retry mechanism
+        # Try to get streams with enhanced retry mechanism and multiple fallback approaches
         stream = None
-        for retry in range(3):
+        
+        # Define multiple stream finding strategies
+        def get_audio_stream_strategies(yt_obj):
+            strategies = [
+                # Strategy 1: Standard audio only
+                lambda: yt_obj.streams.filter(only_audio=True).first(),
+                # Strategy 2: Audio with highest bitrate
+                lambda: yt_obj.streams.filter(only_audio=True).order_by('abr').desc().first(),
+                # Strategy 3: Any audio stream (including adaptive)
+                lambda: yt_obj.streams.filter(adaptive=True, type='audio').first(),
+                # Strategy 4: MP4 audio
+                lambda: yt_obj.streams.filter(only_audio=True, file_extension='mp4').first(),
+                # Strategy 5: WebM audio
+                lambda: yt_obj.streams.filter(only_audio=True, file_extension='webm').first(),
+                # Strategy 6: Any stream with audio (fallback)
+                lambda: yt_obj.streams.filter(type='audio').first(),
+                # Strategy 7: Progressive with audio (last resort)
+                lambda: yt_obj.streams.filter(progressive=True).first()
+            ]
+            return strategies
+        
+        def get_video_stream_strategies(yt_obj):
+            strategies = [
+                # Strategy 1: Standard progressive MP4
+                lambda: yt_obj.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first(),
+                # Strategy 2: Any progressive video
+                lambda: yt_obj.streams.filter(progressive=True).order_by('resolution').desc().first(),
+                # Strategy 3: Adaptive video (highest resolution)
+                lambda: yt_obj.streams.filter(adaptive=True, type='video').order_by('resolution').desc().first(),
+                # Strategy 4: Any MP4 video
+                lambda: yt_obj.streams.filter(file_extension='mp4').order_by('resolution').desc().first(),
+                # Strategy 5: Any video stream
+                lambda: yt_obj.streams.filter(type='video').first(),
+                # Strategy 6: Lowest quality progressive (compatibility)
+                lambda: yt_obj.streams.filter(progressive=True).order_by('resolution').asc().first()
+            ]
+            return strategies
+        
+        # Try multiple approaches with different YouTube clients if needed
+        for retry in range(4):  # Increased retry attempts
             try:
+                print(f"Stream finding attempt {retry + 1}/4...")
+                
+                # Get appropriate strategies
                 if audio:
-                    stream = yt.streams.filter(only_audio=True).first()
+                    strategies = get_audio_stream_strategies(yt)
                     ext = "mp3"
                 else:
-                    stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
+                    strategies = get_video_stream_strategies(yt)
                     ext = "mp4"
-                break
+                
+                # Try each strategy
+                for i, strategy in enumerate(strategies, 1):
+                    try:
+                        print(f"  Trying stream strategy {i}...")
+                        stream = strategy()
+                        if stream:
+                            print(f"  ✅ Stream strategy {i} successful!")
+                            print(f"  Stream details: {stream.mime_type}, {getattr(stream, 'abr', 'N/A')} bitrate")
+                            break
+                    except Exception as strategy_error:
+                        print(f"  ❌ Stream strategy {i} failed: {strategy_error}")
+                        continue
+                
+                if stream:
+                    break
+                    
+                # If no stream found, try recreating YouTube object with different client
+                print(f"No streams found with current client, trying different client...")
+                if retry < 3:  # Don't recreate on last attempt
+                    client_fallbacks = ['ANDROID', 'IOS', 'MWEB', 'WEB']
+                    try:
+                        fallback_client = client_fallbacks[retry]
+                        print(f"Switching to {fallback_client} client...")
+                        yt = PyTubeYT(url, client=fallback_client, use_oauth=False, allow_oauth_cache=False)
+                        # Test the new client works
+                        _ = yt.title
+                        print(f"Successfully switched to {fallback_client} client")
+                        time.sleep(1)  # Brief pause before retrying
+                    except Exception as client_error:
+                        print(f"Failed to switch to {fallback_client} client: {client_error}")
+                        # Continue with existing client
+                        pass
+                
             except Exception as e:
                 print(f"Stream access attempt {retry + 1} failed: {e}")
-                if retry < 2:  # Don't sleep on last attempt
+                if retry < 3:  # Don't sleep on last attempt
                     time.sleep(2)
-                    # Try recreating YouTube object with different client
-                    if retry == 0:
-                        try:
-                            yt = PyTubeYT(url, client='ANDROID')
-                        except:
-                            pass
-                    elif retry == 1:
-                        try:
-                            yt = PyTubeYT(url, client='IOS')
-                        except:
-                            pass
                 continue
-            
+        
         if stream is None:
-            raise Exception("No suitable stream found for download")
+            # Final fallback - try to get ANY available stream
+            try:
+                print("Attempting final fallback - any available stream...")
+                all_streams = list(yt.streams)
+                print(f"Total streams available: {len(all_streams)}")
+                
+                if all_streams:
+                    if audio:
+                        # Prefer audio streams, fallback to any
+                        for s in all_streams:
+                            if hasattr(s, 'type') and 'audio' in str(s.type).lower():
+                                stream = s
+                                ext = "mp3"
+                                print(f"Found audio stream as fallback: {s}")
+                                break
+                        if not stream:
+                            # Use first available stream
+                            stream = all_streams[0]
+                            ext = "mp3"
+                            print(f"Using first available stream as fallback: {stream}")
+                    else:
+                        # Prefer video streams, fallback to any
+                        for s in all_streams:
+                            if hasattr(s, 'type') and 'video' in str(s.type).lower():
+                                stream = s
+                                ext = "mp4"
+                                print(f"Found video stream as fallback: {s}")
+                                break
+                        if not stream:
+                            stream = all_streams[0]
+                            ext = "mp4"
+                            print(f"Using first available stream as fallback: {stream}")
+                            
+            except Exception as fallback_error:
+                print(f"Final fallback also failed: {fallback_error}")
+        
+        if stream is None:
+            raise Exception("No suitable stream found for download after all attempts")
             
         # Use safe file path
         filename = f"{video_id}.{ext}"
@@ -609,17 +714,38 @@ class YouTubeAPI:
             
             formats_available = []
             
-            for stream in yt.streams:
-                if stream.mime_type:
-                    format_info = {
-                        "format": f"{stream.resolution or 'audio'} - {stream.mime_type}",
-                        "filesize": stream.filesize or 0,
-                        "format_id": str(stream.itag),
-                        "ext": stream.mime_type.split('/')[-1] if stream.mime_type else "unknown",
-                        "format_note": stream.resolution or "audio",
-                        "yturl": link,
-                    }
-                    formats_available.append(format_info)
+            # Try to get streams with error handling
+            try:
+                streams = list(yt.streams)
+                print(f"Found {len(streams)} total streams")
+                
+                if not streams:
+                    print("No streams found, trying alternative approach...")
+                    # Try refreshing the YouTube object
+                    yt = PyTubeYT(link, client='ANDROID', use_oauth=False, allow_oauth_cache=False)
+                    streams = list(yt.streams)
+                    print(f"After refresh: Found {len(streams)} streams")
+                
+                for stream in streams:
+                    try:
+                        if stream and hasattr(stream, 'mime_type') and stream.mime_type:
+                            format_info = {
+                                "format": f"{getattr(stream, 'resolution', 'audio') or 'audio'} - {stream.mime_type}",
+                                "filesize": getattr(stream, 'filesize', 0) or 0,
+                                "format_id": str(getattr(stream, 'itag', 'unknown')),
+                                "ext": stream.mime_type.split('/')[-1] if stream.mime_type else "unknown",
+                                "format_note": getattr(stream, 'resolution', 'audio') or "audio",
+                                "yturl": link,
+                            }
+                            formats_available.append(format_info)
+                    except Exception as stream_error:
+                        print(f"Error processing stream: {stream_error}")
+                        continue
+                        
+            except Exception as streams_error:
+                print(f"Error accessing streams: {streams_error}")
+                # Return empty list instead of failing completely
+                pass
             
             return formats_available
         except Exception as e:
