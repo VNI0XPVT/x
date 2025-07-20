@@ -198,11 +198,7 @@ class YouTubeAPI:
                 raise Exception("pytubefix not available")
             from pytubefix import YouTube as PyTubeYT
             
-            # Try to extract video ID from URL first for validation
-            extracted_id = extract_video_id_from_url(link)
-            if not extracted_id:
-                raise Exception(f"Could not extract valid video ID from URL: {link}")
-            
+            # Try PyTube first - it's more flexible than our regex
             yt = PyTubeYT(link)
             title = yt.title or "Unknown Title"
             duration_sec = getattr(yt, "length", None)
@@ -223,10 +219,11 @@ class YouTubeAPI:
             thumbnail = yt.thumbnail_url
             vidid = yt.video_id
             
-            # Validate video ID
-            if not validate_youtube_video_id(vidid):
-                print(f"Invalid video ID extracted: {vidid}")
-                return None, None, None, None, None
+            # Validate video ID - but be more flexible
+            if not vidid or not isinstance(vidid, str) or len(vidid) != 11:
+                print(f"Warning: Unusual video ID format: {vidid}")
+                # Don't fail completely - some videos might have non-standard IDs
+                # but still be playable
                 
             return title, duration_min, duration_sec, thumbnail, vidid
         except Exception as e:
@@ -267,8 +264,9 @@ class YouTubeAPI:
         title, duration_min, duration_sec, thumbnail, vidid = await self.details(link)
         print(f"Track details - Link: {link}, Video ID: {vidid}, Title: {title}")
         
-        if not vidid:
-            print(f"No video ID found for link: {link}")
+        # Check if we got at least title and link - don't fail completely on missing vidid
+        if not title and not link:
+            print(f"No valid details found for link: {link}")
             return {
                 "title": None,
                 "link": None,
