@@ -124,31 +124,39 @@ def speed_converter(seconds, speed):
 
 
 def check_duration(file_path):
-    command = [
-        "ffprobe",
-        "-loglevel",
-        "quiet",
-        "-print_format",
-        "json",
-        "-show_format",
-        "-show_streams",
-        file_path,
-    ]
+    try:
+        command = [
+            "ffprobe",
+            "-loglevel",
+            "quiet",
+            "-print_format",
+            "json",
+            "-show_format",
+            "-show_streams",
+            file_path,
+        ]
 
-    pipe = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    out, err = pipe.communicate()
-    _json = json.loads(out)
+        pipe = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        out, err = pipe.communicate()
+        
+        if not out:
+            return "Unknown"
+            
+        _json = json.loads(out)
 
-    if "format" in _json:
-        if "duration" in _json["format"]:
-            return float(_json["format"]["duration"])
+        if "format" in _json:
+            if "duration" in _json["format"]:
+                return float(_json["format"]["duration"])
 
-    if "streams" in _json:
-        for s in _json["streams"]:
-            if "duration" in s:
-                return float(s["duration"])
+        if "streams" in _json:
+            for s in _json["streams"]:
+                if "duration" in s:
+                    return float(s["duration"])
 
-    return "Unknown"
+        return "Unknown"
+    except (subprocess.SubprocessError, FileNotFoundError, json.JSONDecodeError, ValueError):
+        # ffprobe not found or other error - return unknown duration
+        return "Unknown"
 
 
 formats = [
