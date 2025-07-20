@@ -285,13 +285,16 @@ async def play_commnd(
         streamtype = "youtube"
     if str(playmode) == "Direct":
         if not plist_type:
-            if safe_get(details, "duration_min"):
-                duration_sec = time_to_seconds(safe_get(details, "duration_min"))
+            duration_min = safe_get(details, "duration_min")
+            # Check if this is actually a live stream (not just missing duration)
+            if duration_min and duration_min != "Live" and duration_min != "0:00":
+                duration_sec = time_to_seconds(duration_min)
                 if duration_sec > config.DURATION_LIMIT:
                     return await mystic.edit_text(
                         _["play_6"].format(config.DURATION_LIMIT_MIN, app.mention)
                     )
-            else:
+            elif duration_min == "Live":
+                # This is actually a live stream
                 buttons = livestream_markup(
                     _,
                     track_id,
@@ -304,6 +307,7 @@ async def play_commnd(
                     _["play_13"],
                     reply_markup=InlineKeyboardMarkup(buttons),
                 )
+            # For "0:00" or other durations, continue with normal playback
         try:
             await stream(
                 _,
