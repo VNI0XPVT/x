@@ -10,125 +10,6 @@ import random
 from typing import Union
 from urllib.parse import urlparse, parse_qs
 
-# YouTube Flask API client integration
-WEB_API_AVAILABLE = False
-API_BASE_URL = os.getenv("YOUTUBE_API_URL", "http://127.0.0.1:8000")
-API_KEY = os.getenv("YOUTUBE_API_KEY", "10968cc13c074e53b3039b8eead672fd")
-
-try:
-    import requests
-    
-    def make_api_request(endpoint, data=None, params=None, timeout=30):
-        """Make authenticated request to YouTube API"""
-        try:
-            url = f"{API_BASE_URL}{endpoint}"
-            headers = {"x-api-key": API_KEY}
-            
-            if data is None:
-                response = requests.get(url, headers=headers, params=params, timeout=timeout)
-            else:
-                response = requests.post(url, headers=headers, json=data, timeout=timeout)
-            
-            response.raise_for_status()
-            
-            # Handle file downloads
-            if response.headers.get('content-disposition'):
-                # This is a file download
-                return response.content, True
-            
-            # Regular JSON response
-            return response.json(), True
-            
-        except requests.exceptions.ConnectionError:
-            return {"error": f"Cannot connect to API at {API_BASE_URL}"}, False
-        except requests.exceptions.Timeout:
-            return {"error": "API request timed out"}, False
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 401:
-                return {"error": "Invalid API key"}, False
-            return {"error": f"HTTP error: {e.response.status_code}"}, False
-        except Exception as e:
-            return {"error": f"Request failed: {str(e)}"}, False
-
-    def api_health_check():
-        """Check if API is running"""
-        result, success = make_api_request("/")
-        return success and result.get("status") == "running"
-
-    def api_get_details(url):
-        """Get video details from API"""
-        data = {"url": url}
-        result, success = make_api_request("/details", data)
-        
-        if success and result.get("success"):
-            return (
-                result.get("title", "Unknown"),
-                result.get("duration_min", "0:00"),
-                result.get("duration_sec", 0),
-                result.get("thumbnail"),
-                result.get("video_id")
-            )
-        else:
-            return None, None, None, None, None
-
-    def api_download(video_id, audio_only=True):
-        """Download via API"""
-        try:
-            endpoint = "/download/audio" if audio_only else "/download/video"
-            params = {"video_id": video_id}
-            
-            result, success = make_api_request(endpoint, params=params)
-            
-            if success and isinstance(result, bytes):
-                # File download successful, save to temp file
-                import tempfile
-                ext = "mp3" if audio_only else "mp4"
-                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}")
-                temp_file.write(result)
-                temp_file.close()
-                return temp_file.name, True
-            else:
-                error = result.get("error", "Unknown API error") if isinstance(result, dict) else "Download failed"
-                return error, False
-                
-        except Exception as e:
-            return f"Download error: {str(e)}", False
-
-    def api_search(query, limit=5):
-        """Search via API"""
-        data = {"query": query, "limit": limit}
-        result, success = make_api_request("/search", data)
-        
-        if success and result.get("success"):
-            return result.get("results", [])
-        else:
-            return []
-
-    def api_get_playlist(url, limit=10):
-        """Get playlist info via API"""
-        data = {"url": url, "limit": limit}
-        result, success = make_api_request("/playlist", data)
-        
-        if success and result.get("success"):
-            return result.get("video_ids", [])
-        else:
-            return []
-
-    # Check if API is available at startup
-    WEB_API_AVAILABLE = api_health_check()
-    if WEB_API_AVAILABLE:
-        print(f"✅ YouTube Flask API available at {API_BASE_URL}")
-        print(f"🔑 Using API key: {API_KEY[:8]}...")
-    else:
-        print(f"⚠️ YouTube Flask API not available at {API_BASE_URL}")
-
-except ImportError:
-    print("⚠️ requests not available, Web API integration disabled")
-    WEB_API_AVAILABLE = False
-except Exception as e:
-    print(f"⚠️ Web API integration failed: {e}")
-    WEB_API_AVAILABLE = False
-
 # Global session cache for bot detection avoidance
 _youtube_session_cache = {}
 _last_request_time = 0
@@ -554,20 +435,7 @@ class YouTubeAPI:
         if "&" in link:
             link = link.split("&")[0]
         
-        # Try Flask API first if available
-        if WEB_API_AVAILABLE:
-            try:
-                print("🌐 Trying Flask API for details...")
-                api_result = api_get_details(link)
-                if api_result[0] is not None:  # title is not None
-                    print("✅ Flask API details successful!")
-                    return api_result
-                else:
-                    print("⚠️ Flask API failed, trying local pytubefix...")
-            except Exception as e:
-                print(f"⚠️ Flask API error: {e}, trying local pytubefix...")
-        
-        # Fallback to local pytubefix method
+        # Use pytubefix for video details
         try:
             if not PYTUBEFIX_AVAILABLE:
                 raise Exception("pytubefix not available")
@@ -680,45 +548,30 @@ class YouTubeAPI:
         elif is_youtube_url(query):
             link = query
         else:
-            # Try Web API search first
-            if WEB_API_AVAILABLE:
-                try:
-                    print("🌐 Trying Flask API for search...")
-                    search_results = api_search(query, limit=1)
-                    if search_results and len(search_results) > 0:
-                        first_result = search_results[0]
-                        link = first_result.get("link")
-                        print(f"✅ Flask API search found: {link}")
-                    else:
-                        print("⚠️ Flask API search returned no results, trying local search...")
-                except Exception as e:
-                    print(f"⚠️ Flask API search error: {e}, trying local search...")
-            
-            # Fallback to local search if API failed or not available
-            if not link:
-                try:
-                    if not YOUTUBE_SEARCH_AVAILABLE:
-                        print("WARNING: youtube-search-python not available!")
-                        raise Exception("youtube-search-python not available")
-                    from youtubesearchpython import VideosSearch
-                    print(f"Searching YouTube for: {query}")
-                    search = VideosSearch(query, limit=1)
-                    results = search.result()
-                    print(f"Search results: {results}")
-                    if not results or "result" not in results or not results["result"]:
-                        raise Exception("No YouTube results found")
-                    first = results["result"][0]
-                    link = first.get("link")
-                    print(f"Found link: {link}")
-                except Exception as e:
-                    print(f"Failed to search YouTube: {e}")
-                    return {
-                        "title": None,
-                        "link": None,
-                        "vidid": None,
-                        "duration_min": None,
-                        "thumb": None
-                    }, None
+            # Use local search
+            try:
+                if not YOUTUBE_SEARCH_AVAILABLE:
+                    print("WARNING: youtube-search-python not available!")
+                    raise Exception("youtube-search-python not available")
+                from youtubesearchpython import VideosSearch
+                print(f"Searching YouTube for: {query}")
+                search = VideosSearch(query, limit=1)
+                results = search.result()
+                print(f"Search results: {results}")
+                if not results or "result" not in results or not results["result"]:
+                    raise Exception("No YouTube results found")
+                first = results["result"][0]
+                link = first.get("link")
+                print(f"Found link: {link}")
+            except Exception as e:
+                print(f"Failed to search YouTube: {e}")
+                return {
+                    "title": None,
+                    "link": None,
+                    "vidid": None,
+                    "duration_min": None,
+                    "thumb": None
+                }, None
         
         title, duration_min, duration_sec, thumbnail, vidid = await self.details(link)
         print(f"Track details - Link: {link}, Video ID: {vidid}, Title: {title}")
@@ -762,20 +615,7 @@ class YouTubeAPI:
         if "&" in link:
             link = link.split("&")[0]
         
-        # Try Flask API first
-        if WEB_API_AVAILABLE:
-            try:
-                print("🌐 Trying Flask API for playlist...")
-                video_ids = api_get_playlist(link, limit)
-                if video_ids:
-                    print(f"✅ Flask API playlist found {len(video_ids)} videos")
-                    return video_ids
-                else:
-                    print("⚠️ Flask API playlist returned no results, trying local...")
-            except Exception as e:
-                print(f"⚠️ Flask API playlist error: {e}, trying local...")
-        
-        # Fallback to local method
+        # Use local pytubefix method
         try:
             if not PYTUBEFIX_AVAILABLE:
                 raise Exception("pytubefix not available")
@@ -1022,28 +862,15 @@ class YouTubeAPI:
             # Determine if we want audio or video
             want_video = bool(songvideo or video)
             
-            # Try Flask API first if available
-            if WEB_API_AVAILABLE:
-                try:
-                    print("🌐 Trying Flask API for download...")
-                    api_result = api_download(video_id, audio_only=not want_video)
-                    if api_result[1]:  # success is True
-                        print("✅ Flask API download successful!")
-                        return api_result
-                    else:
-                        print("⚠️ Flask API download failed, trying local pytubefix...")
-                except Exception as e:
-                    print(f"⚠️ Flask API download error: {e}, trying local pytubefix...")
-
-            # Fallback to local pytubefix method
+            # Use local pytubefix method
             if not PYTUBEFIX_AVAILABLE:
-                raise Exception("pytubefix not available and Flask API failed")
+                raise Exception("pytubefix not available")
 
             file_path = await get_file_with_pytubefix(video_id, audio=not want_video)
             
             return file_path, True
         except Exception as e:
-            error_msg = f"Failed to download {video_id}: {e}"
+            error_msg = f"Failed to download {video_id if 'video_id' in locals() else link}: {e}"
             print(error_msg)
             raise Exception(error_msg)  # Raise exception instead of returning None
 
