@@ -94,7 +94,7 @@ async def song_commad_private(client, message: Message, _):
         ) = await YouTube.details(query)
     except Exception as err:
         try:
-            await app.send_message(chat_id=config.LOGGER_ID, text=f"**🔴>> ERROR IN PROCCESSING THE QUERY :**\n{err}")
+            await app.send_message(chat_id=config.LOGGER_ID, text=f"<b>🔴>> ERROR IN PROCCESSING THE QUERY :</b>\n{err}")
         except:
             pass
         return await mystic.edit_text(_["play_3"])

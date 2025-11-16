@@ -30,24 +30,24 @@ async def active_afk(_, message: Message):
             
             if afktype == "text":
                 send = await message.reply_text(
-                    f"<blockquote>**{message.from_user.first_name}** ɪs ʙᴀᴄᴋ ᴏɴʟɪɴᴇ ᴀɴᴅ ᴡᴀs ᴀᴡᴀʏ ғᴏʀ {seenago}</blockquote>",
+                    f"<blockquote><b>{message.from_user.first_name}</b> ɪs ʙᴀᴄᴋ ᴏɴʟɪɴᴇ ᴀɴᴅ ᴡᴀs ᴀᴡᴀʏ ғᴏʀ {seenago}</blockquote>",
                     disable_web_page_preview=True,
                 )
             elif afktype == "text_reason":
                 send = await message.reply_text(
-                    f"<blockquote>**{message.from_user.first_name}** ɪs ʙᴀᴄᴋ ᴏɴʟɪɴᴇ ᴀɴᴅ ᴡᴀs ᴀᴡᴀʏ ғᴏʀ {seenago}\n\nʀᴇᴀsᴏɴ: `{reasonafk}`</blockquote>",
+                    f"<blockquote><b>{message.from_user.first_name}</b> ɪs ʙᴀᴄᴋ ᴏɴʟɪɴᴇ ᴀɴᴅ ᴡᴀs ᴀᴡᴀʏ ғᴏʀ {seenago}\n\nʀᴇᴀsᴏɴ: <code>{reasonafk}</code></blockquote>",
                     disable_web_page_preview=True,
                 )
             elif afktype == "animation":
-                caption = f"<blockquote>**{message.from_user.first_name}** ɪs ʙᴀᴄᴋ ᴏɴʟɪɴᴇ ᴀɴᴅ ᴡᴀs ᴀᴡᴀʏ ғᴏʀ {seenago}"
+                caption = f"<blockquote><b>{message.from_user.first_name}</b> ɪs ʙᴀᴄᴋ ᴏɴʟɪɴᴇ ᴀɴᴅ ᴡᴀs ᴀᴡᴀʏ ғᴏʀ {seenago}"
                 if str(reasonafk) != "None":
-                    caption += f"\n\nʀᴇᴀsᴏɴ: `{reasonafk}`"
+                    caption += f"\n\nʀᴇᴀsᴏɴ: <code>{reasonafk}</code>"
                 caption += "</blockquote>"
                 send = await message.reply_animation(data, caption=caption)
             elif afktype == "photo":
-                caption = f"<blockquote>**{message.from_user.first_name}** ɪs ʙᴀᴄᴋ ᴏɴʟɪɴᴇ ᴀɴᴅ ᴡᴀs ᴀᴡᴀʏ ғᴏʀ {seenago}"
+                caption = f"<blockquote><b>{message.from_user.first_name}</b> ɪs ʙᴀᴄᴋ ᴏɴʟɪɴᴇ ᴀɴᴅ ᴡᴀs ᴀᴡᴀʏ ғᴏʀ {seenago}"
                 if str(reasonafk) != "None":
-                    caption += f"\n\nʀᴇᴀsᴏɴ: `{reasonafk}`"
+                    caption += f"\n\nʀᴇᴀsᴏɴ: <code>{reasonafk}</code>"
                 caption += "</blockquote>"
                 photo_path = f"downloads/{user_id}.jpg"
                 if os.path.exists(photo_path):
