@@ -289,14 +289,12 @@ async def gen_thumb(videoid, user_id):
 
         try:
             youtube = Image.open(os.path.join(cache_dir, f"thumb{videoid}.png"))
-            # Prefer a custom Dolby thumbnail asset if present, otherwise use morningx.png
-            dolby_asset = "Dolbymusic/assets/dolby_thumb.png .png"
-            bg_path = "Dolbymusic/assets/morningx.png"
+            # Use Dolby thumbnail as background
+            dolby_asset = "Dolbymusic/assets/dolby_thumb.png"
             if os.path.exists(dolby_asset):
                 bg = Image.open(dolby_asset)
-            elif os.path.exists(bg_path):
-                bg = Image.open(bg_path)
             else:
+                # Fallback to default background if dolby_thumb.png not found
                 bg = Image.new("RGBA", (1280, 720), color=(0, 0, 0, 180))
         except Exception:
             # Create fallback images
