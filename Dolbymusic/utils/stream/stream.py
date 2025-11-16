@@ -16,6 +16,19 @@ from Dolbymusic.utils.pastebin import AyushSoloBin
 from Dolbymusic.utils.stream.queue import put_queue, put_queue_index
 from Dolbymusic.utils.thumbnails import get_thumb
 
+# Import sticker deletion function
+_sticker_delete_func = None
+
+def _get_sticker_delete():
+    global _sticker_delete_func
+    if _sticker_delete_func is None:
+        try:
+            from Dolbymusic.plugins.play.play import _delete_placeholder_sticker
+            _sticker_delete_func = _delete_placeholder_sticker
+        except Exception:
+            pass
+    return _sticker_delete_func
+
 
 async def stream(
     _,
@@ -29,10 +42,13 @@ async def stream(
     streamtype: Union[bool, str] = None,
     spotify: Union[bool, str] = None,
     forceplay: Union[bool, str] = None,
+    sticker_key: Union[str, None] = None,
 ):
-    print(f"Stream called with streamtype: {streamtype}, result: {result}")
+    print(f"[STREAM] Called with streamtype: {streamtype}, result type: {type(result)}")
+    print(f"[STREAM] Result preview: {str(result)[:200] if result else 'None'}")
     
     if not result:
+        print("[STREAM] No result provided, returning")
         return
     if forceplay:
         await AyushSolo.force_stop_stream(chat_id)
@@ -113,8 +129,16 @@ async def stream(
                         user_name,
                     ),
                     reply_markup=InlineKeyboardMarkup(button),
-                    parse_mode=ParseMode.MARKDOWN,
+                    parse_mode=ParseMode.HTML,
                 )
+                # Delete placeholder sticker after photo is sent
+                if sticker_key:
+                    delete_func = _get_sticker_delete()
+                    if delete_func:
+                        try:
+                            await delete_func(app, sticker_key)
+                        except Exception as e:
+                            print(f"Failed to delete sticker: {e}")
                 db[chat_id][0]["mystic"] = run
                 db[chat_id][0]["markup"] = "stream"
         if count == 0:
@@ -163,16 +187,29 @@ async def stream(
         try:
             # Use vidid if available, otherwise use link
             download_target = vidid if vidid else link
-            file_path, direct = await YouTube.download(
+            print(f"[STREAM] Downloading: {download_target}, videoid={bool(vidid)}, video={status}")
+            result = await YouTube.download(
                 download_target, mystic, videoid=bool(vidid), video=status
             )
-            # Verify file_path is valid
-            if not file_path or file_path == "None" or not isinstance(file_path, str):
-                raise Exception(f"Invalid file path returned: {file_path}")
-            if not os.path.exists(file_path):
-                raise Exception(f"Downloaded file does not exist: {file_path}")
+            
+            # Handle both tuple (file_path, direct) and string (streaming URL) returns
+            if isinstance(result, tuple):
+                file_path, direct = result
+                print(f"[STREAM] Got tuple result: file_path={file_path}, direct={direct}")
+                # Verify file_path is valid for downloaded files
+                if not file_path or file_path == "None" or not isinstance(file_path, str):
+                    raise Exception(f"Invalid file path returned: {file_path}")
+                if direct and not os.path.exists(file_path):
+                    raise Exception(f"Downloaded file does not exist: {file_path}")
+            else:
+                # It's a streaming URL
+                file_path = result
+                direct = False
+                print(f"[STREAM] Got streaming URL: {file_path}")
+                if not file_path or not isinstance(file_path, str):
+                    raise Exception(f"Invalid streaming URL returned: {file_path}")
         except Exception as download_error:
-            print(f"Download failed: {download_error}")
+            print(f"[STREAM] Download failed: {download_error}")
             raise AssistantErr(_["play_14"])
         if await is_active_chat(chat_id):
             await put_queue(
@@ -192,8 +229,16 @@ async def stream(
                 chat_id=original_chat_id,
                 text=_["queue_4"].format(position, title[:27], duration_min, user_name),
                 reply_markup=InlineKeyboardMarkup(button),
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=ParseMode.HTML,
             )
+            # Delete placeholder sticker after queue message is sent
+            if sticker_key:
+                delete_func = _get_sticker_delete()
+                if delete_func:
+                    try:
+                        await delete_func(app, sticker_key)
+                    except Exception as e:
+                        print(f"Failed to delete sticker: {e}")
         else:
             if not forceplay:
                 db[chat_id] = []
@@ -228,8 +273,16 @@ async def stream(
                     user_name,
                 ),
                 reply_markup=InlineKeyboardMarkup(button),
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=ParseMode.HTML,
             )
+            # Delete placeholder sticker after photo is sent
+            if sticker_key:
+                delete_func = _get_sticker_delete()
+                if delete_func:
+                    try:
+                        await delete_func(app, sticker_key)
+                    except Exception as e:
+                        print(f"Failed to delete sticker: {e}")
             db[chat_id][0]["mystic"] = run
             db[chat_id][0]["markup"] = "stream"
     elif streamtype == "soundcloud":
@@ -254,8 +307,16 @@ async def stream(
                 chat_id=original_chat_id,
                 text=_["queue_4"].format(position, title[:27], duration_min, user_name),
                 reply_markup=InlineKeyboardMarkup(button),
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=ParseMode.HTML,
             )
+            # Delete placeholder sticker after queue message is sent
+            if sticker_key:
+                delete_func = _get_sticker_delete()
+                if delete_func:
+                    try:
+                        await delete_func(app, sticker_key)
+                    except Exception as e:
+                        print(f"Failed to delete sticker: {e}")
         else:
             if not forceplay:
                 db[chat_id] = []
@@ -280,8 +341,16 @@ async def stream(
                     config.SUPPORT_CHAT, title[:23], duration_min, user_name
                 ),
                 reply_markup=InlineKeyboardMarkup(button),
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=ParseMode.HTML,
             )
+            # Delete placeholder sticker after photo is sent
+            if sticker_key:
+                delete_func = _get_sticker_delete()
+                if delete_func:
+                    try:
+                        await delete_func(app, sticker_key)
+                    except Exception as e:
+                        print(f"Failed to delete sticker: {e}")
             db[chat_id][0]["mystic"] = run
             db[chat_id][0]["markup"] = "tg"
     elif streamtype == "telegram":
@@ -315,8 +384,16 @@ async def stream(
                 chat_id=original_chat_id,
                 text=_["queue_4"].format(position, title[:27], duration_min, user_name),
                 reply_markup=InlineKeyboardMarkup(button),
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=ParseMode.HTML,
             )
+            # Delete placeholder sticker after queue message is sent
+            if sticker_key:
+                delete_func = _get_sticker_delete()
+                if delete_func:
+                    try:
+                        await delete_func(app, sticker_key)
+                    except Exception as e:
+                        print(f"Failed to delete sticker: {e}")
         else:
             if not forceplay:
                 db[chat_id] = []
@@ -341,8 +418,16 @@ async def stream(
                 photo=config.TELEGRAM_VIDEO_URL if video else config.TELEGRAM_AUDIO_URL,
                 caption=_["stream_1"].format(link, title[:23], duration_min, user_name),
                 reply_markup=InlineKeyboardMarkup(button),
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=ParseMode.HTML,
             )
+            # Delete placeholder sticker after photo is sent
+            if sticker_key:
+                delete_func = _get_sticker_delete()
+                if delete_func:
+                    try:
+                        await delete_func(app, sticker_key)
+                    except Exception as e:
+                        print(f"Failed to delete sticker: {e}")
             db[chat_id][0]["mystic"] = run
             db[chat_id][0]["markup"] = "tg"
     elif streamtype == "live":
@@ -377,8 +462,16 @@ async def stream(
                 chat_id=original_chat_id,
                 text=_["queue_4"].format(position, title[:27], duration_min, user_name),
                 reply_markup=InlineKeyboardMarkup(button),
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=ParseMode.HTML,
             )
+            # Delete placeholder sticker after queue message is sent
+            if sticker_key:
+                delete_func = _get_sticker_delete()
+                if delete_func:
+                    try:
+                        await delete_func(app, sticker_key)
+                    except Exception as e:
+                        print(f"Failed to delete sticker: {e}")
         else:
             if not forceplay:
                 db[chat_id] = []
@@ -416,8 +509,16 @@ async def stream(
                     user_name,
                 ),
                 reply_markup=InlineKeyboardMarkup(button),
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=ParseMode.HTML,
             )
+            # Delete placeholder sticker after photo is sent
+            if sticker_key:
+                delete_func = _get_sticker_delete()
+                if delete_func:
+                    try:
+                        await delete_func(app, sticker_key)
+                    except Exception as e:
+                        print(f"Failed to delete sticker: {e}")
             db[chat_id][0]["mystic"] = run
             db[chat_id][0]["markup"] = "tg"
     elif streamtype == "index":
@@ -440,8 +541,16 @@ async def stream(
             await mystic.edit_text(
                 text=_["queue_4"].format(position, title[:27], duration_min, user_name),
                 reply_markup=InlineKeyboardMarkup(button),
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=ParseMode.HTML,
             )
+            # Delete placeholder sticker after queue message is sent
+            if sticker_key:
+                delete_func = _get_sticker_delete()
+                if delete_func:
+                    try:
+                        await delete_func(app, sticker_key)
+                    except Exception as e:
+                        print(f"Failed to delete sticker: {e}")
         else:
             if not forceplay:
                 db[chat_id] = []
@@ -468,8 +577,16 @@ async def stream(
                 photo=config.STREAM_IMG_URL,
                 caption=_["stream_2"].format(user_name),
                 reply_markup=InlineKeyboardMarkup(button),
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=ParseMode.HTML,
             )
+            # Delete placeholder sticker after photo is sent
+            if sticker_key:
+                delete_func = _get_sticker_delete()
+                if delete_func:
+                    try:
+                        await delete_func(app, sticker_key)
+                    except Exception as e:
+                        print(f"Failed to delete sticker: {e}")
             db[chat_id][0]["mystic"] = run
             db[chat_id][0]["markup"] = "tg"
             await mystic.delete()

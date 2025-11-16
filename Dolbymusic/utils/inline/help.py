@@ -103,6 +103,20 @@ def help_panel_1(_):
         ],
         [
             InlineKeyboardButton(
+                text=_["H_B_16"],
+                callback_data="help_callback hb16",
+            ),
+            InlineKeyboardButton(
+                text=_["H_B_17"],
+                callback_data="help_callback hb17",
+            ),
+            InlineKeyboardButton(
+                text=_["H_B_18"],
+                callback_data="help_callback hb18",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
                 text="◁",
                 callback_data="settings_back_helper",
             ),

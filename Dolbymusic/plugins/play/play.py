@@ -1,6 +1,7 @@
 import logging
 import random
 import string
+import asyncio
 
 from pyrogram import filters
 from pyrogram.types import InlineKeyboardMarkup, InputMediaPhoto, Message
@@ -26,6 +27,52 @@ from Dolbymusic.utils.stream.stream import stream
 from config import BANNED_USERS, lyrical
 
 logging.basicConfig(level=logging.INFO)
+
+# Sticker placeholder manager: send in background and store id for later deletion
+_sticker_map = {}
+_sticker_lock = asyncio.Lock()
+
+
+async def _send_placeholder_sticker(client, chat_id: int, sticker: str, key: str):
+    try:
+        msg = await client.send_sticker(chat_id=chat_id, sticker=sticker)
+        async with _sticker_lock:
+            _sticker_map[key] = (msg.chat.id, msg.id)
+            print(f"[STICKER] Saved sticker: key={key}, chat={msg.chat.id}, msg_id={msg.id}")
+    except Exception as e:
+        print(f"[STICKER] Failed to send sticker: {e}")
+        # don't propagate — placeholder must be best-effort
+        return
+
+
+async def _delete_placeholder_sticker(client, key: str):
+    try:
+        print(f"[STICKER] Attempting to delete sticker with key: {key}")
+        async with _sticker_lock:
+            tup = _sticker_map.pop(key, None)
+        if not tup:
+            print(f"[STICKER] No sticker found in map for key: {key}")
+            return
+        chat_id, msg_id = tup
+        print(f"[STICKER] Deleting sticker: chat={chat_id}, msg_id={msg_id}")
+        try:
+            await client.delete_messages(chat_id, msg_id)
+            print(f"[STICKER] Successfully deleted sticker")
+        except Exception as e:
+            print(f"[STICKER] Failed to delete message: {e}")
+            # ignore deletion errors
+            return
+    except Exception as e:
+        print(f"[STICKER] Unexpected error in delete: {e}")
+        return
+
+
+async def _send_error(mystic, message, error_text: str):
+    """Send error message - either edit mystic or reply to message"""
+    if mystic:
+        return await mystic.edit_text(error_text)
+    else:
+        return await message.reply_text(error_text)
 
 def safe_get(details, key, default=None):
     return details.get(key) if details and isinstance(details, dict) and details.get(key) else default
@@ -58,9 +105,14 @@ async def play_commnd(
     url,
     fplay,
 ):
-    mystic = await message.reply_text(
-        _["play_2"].format(channel) if channel else _["play_1"]
-    )
+    # Send only sticker as placeholder (no text message)
+    sticker_id = "CAACAgUAAxkBAAEPwtVpFLXZIxqvskH1l4FLIK8tljoL8QACWhwAAsCAoVRaaZgaYqR9DjYE"
+    sticker_key = f"{message.chat.id}:placeholder"
+    mystic = None  # No text message - only sticker
+    
+    # Send sticker in background
+    asyncio.create_task(_send_placeholder_sticker(app, message.chat.id, sticker_id, sticker_key))
+    
     plist_id = None
     slider = None
     plist_type = None
@@ -79,10 +131,11 @@ async def play_commnd(
     )
     if audio_telegram:
         if audio_telegram.file_size > 104857600:
-            return await mystic.edit_text(_["play_5"])
+            return await _send_error(mystic, message, _["play_5"])
         duration_min = seconds_to_min(audio_telegram.duration)
         if (audio_telegram.duration) > config.DURATION_LIMIT:
-            return await mystic.edit_text(
+            return await _send_error(
+                mystic, message,
                 _["play_6"].format(config.DURATION_LIMIT_MIN, app.mention)
             )
         file_path = await Telegram.get_filepath(audio=audio_telegram)
@@ -107,26 +160,32 @@ async def play_commnd(
                     message.chat.id,
                     streamtype="telegram",
                     forceplay=fplay,
+                    sticker_key=sticker_key,
                 )
             except Exception as e:
                 logging.error("Exception in telegram stream: %s", e, exc_info=True)
-                return await mystic.edit_text(_["general_2"].format(type(e).__name__))
-            return await mystic.delete()
+                try:
+                    await _delete_placeholder_sticker(app, sticker_key)
+                except Exception:
+                    pass
+                return await _send_error(mystic, message, _["general_2"].format(type(e).__name__))
         return
     elif video_telegram:
         if message.reply_to_message.document:
             try:
                 ext = video_telegram.file_name.split(".")[-1]
                 if ext.lower() not in formats:
-                    return await mystic.edit_text(
+                    return await _send_error(
+                        mystic, message,
                         _["play_7"].format(f"{' | '.join(formats)}")
                     )
             except:
-                return await mystic.edit_text(
+                return await _send_error(
+                    mystic, message,
                     _["play_7"].format(f"{' | '.join(formats)}")
                 )
         if video_telegram.file_size > config.TG_VIDEO_FILESIZE_LIMIT:
-            return await mystic.edit_text(_["play_8"])
+            return await _send_error(mystic, message, _["play_8"])
         file_path = await Telegram.get_filepath(video=video_telegram)
         if await Telegram.download(_, message, mystic, file_path):
             message_link = await Telegram.get_link(message)
@@ -150,11 +209,15 @@ async def play_commnd(
                     video=True,
                     streamtype="telegram",
                     forceplay=fplay,
+                    sticker_key=sticker_key,
                 )
             except Exception as e:
                 logging.error("Exception in telegram video stream: %s", e, exc_info=True)
-                return await mystic.edit_text(_["general_2"].format(type(e).__name__))
-            return await mystic.delete()
+                try:
+                    await _delete_placeholder_sticker(app, sticker_key)
+                except Exception:
+                    pass
+                return await _send_error(mystic, message, _["general_2"].format(type(e).__name__))
         return
     elif url:
         if await YouTube.exists(url):
@@ -167,7 +230,7 @@ async def play_commnd(
                     )
                 except Exception as err:
                     logging.error("Exception in YouTube.playlist: %s", err, exc_info=True)
-                    return await mystic.edit_text(_["play_3"])
+                    return await _send_error(mystic, message, _["play_3"])
                 streamtype = "playlist"
                 plist_type = "yt"
                 if "&" in url:
@@ -181,7 +244,7 @@ async def play_commnd(
                     details, track_id = await YouTube.track(url)
                 except Exception as err:
                     logging.error("Exception in YouTube.track: %s", err, exc_info=True)
-                    return await mystic.edit_text(_["play_3"])
+                    return await _send_error(mystic, message, _["play_3"])
                 streamtype = "youtube"
                 img = safe_get(details, "thumb") or safe_get(details, "thumbnail") or config.PLAYLIST_IMG_URL
                 title = safe_get(details, "title", "Unknown Title")
@@ -190,7 +253,8 @@ async def play_commnd(
         elif await Spotify.valid(url):
             spotify = True
             if not config.SPOTIFY_CLIENT_ID and not config.SPOTIFY_CLIENT_SECRET:
-                return await mystic.edit_text(
+                return await _send_error(
+                    mystic, message,
                     "» sᴘᴏᴛɪғʏ ɪs ɴᴏᴛ sᴜᴘᴘᴏʀᴛᴇᴅ ʏᴇᴛ.\n\nᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ."
                 )
             if "track" in url:
@@ -198,7 +262,7 @@ async def play_commnd(
                     details, track_id = await Spotify.track(url)
                 except Exception as err:
                     logging.error("Exception in Spotify.track: %s", err, exc_info=True)
-                    return await mystic.edit_text(_["play_3"])
+                    return await _send_error(mystic, message, _["play_3"])
                 streamtype = "youtube"
                 img = safe_get(details, "thumb") or safe_get(details, "thumbnail") or config.PLAYLIST_IMG_URL
                 title = safe_get(details, "title", "Unknown Title")
@@ -209,7 +273,7 @@ async def play_commnd(
                     details, plist_id = await Spotify.playlist(url)
                 except Exception as err:
                     logging.error("Exception in Spotify.playlist: %s", err, exc_info=True)
-                    return await mystic.edit_text(_["play_3"])
+                    return await _send_error(mystic, message, _["play_3"])
                 streamtype = "playlist"
                 plist_type = "spplay"
                 img = config.SPOTIFY_PLAYLIST_IMG_URL
@@ -219,7 +283,7 @@ async def play_commnd(
                     details, plist_id = await Spotify.album(url)
                 except Exception as err:
                     logging.error("Exception in Spotify.album: %s", err, exc_info=True)
-                    return await mystic.edit_text(_["play_3"])
+                    return await _send_error(mystic, message, _["play_3"])
                 streamtype = "playlist"
                 plist_type = "spalbum"
                 img = config.SPOTIFY_ALBUM_IMG_URL
@@ -229,26 +293,29 @@ async def play_commnd(
                     details, plist_id = await Spotify.artist(url)
                 except Exception as err:
                     logging.error("Exception in Spotify.artist: %s", err, exc_info=True)
-                    return await mystic.edit_text(_["play_3"])
+                    return await _send_error(mystic, message, _["play_3"])
                 streamtype = "playlist"
                 plist_type = "spartist"
                 img = config.SPOTIFY_ARTIST_IMG_URL
                 cap = _["play_11"].format(message.from_user.first_name)
             else:
-                return await mystic.edit_text(_["play_15"])
+                return await _send_error(mystic, message, _["play_15"])
         else:
             try:
                 await AyushSolo.stream_call(url)
             except NoActiveGroupCall:
-                await mystic.edit_text(_["black_9"])
+                await _send_error(mystic, message, _["black_9"])
                 return await app.send_message(
                     chat_id=config.LOGGER_ID,
                     text=_["play_17"],
                 )
             except Exception as e:
                 logging.error("Exception in AyushSolo.stream_call: %s", e, exc_info=True)
-                return await mystic.edit_text(_["general_2"].format(type(e).__name__))
-            await mystic.edit_text(_["str_2"])
+                return await _send_error(mystic, message, _["general_2"].format(type(e).__name__))
+            if mystic:
+                await mystic.edit_text(_["str_2"])
+            else:
+                await message.reply_text(_["str_2"])
             try:
                 await stream(
                     _,
@@ -261,18 +328,29 @@ async def play_commnd(
                     video=video,
                     streamtype="index",
                     forceplay=fplay,
+                    sticker_key=sticker_key,
                 )
             except Exception as e:
                 logging.error("Exception in index stream: %s", e, exc_info=True)
-                return await mystic.edit_text(_["general_2"].format(type(e).__name__))
+                try:
+                    await _delete_placeholder_sticker(app, sticker_key)
+                except Exception:
+                    pass
+                return await _send_error(mystic, message, _("general_2").format(type(e).__name__))
             return await play_logs(message, streamtype="M3u8 or Index Link")
     else:
         if len(message.command) < 2:
             buttons = botplaylist_markup(_)
-            return await mystic.edit_text(
-                _["play_18"],
-                reply_markup=InlineKeyboardMarkup(buttons),
-            )
+            if mystic:
+                return await mystic.edit_text(
+                    _["play_18"],
+                    reply_markup=InlineKeyboardMarkup(buttons),
+                )
+            else:
+                return await message.reply_text(
+                    _["play_18"],
+                    reply_markup=InlineKeyboardMarkup(buttons),
+                )
         slider = True
         query = message.text.split(None, 1)[1]
         if "-v" in query:
@@ -284,7 +362,7 @@ async def play_commnd(
             # More detailed validation with debugging
             if not details:
                 print(f"No details returned for query: {query}")
-                return await mystic.edit_text(_["play_3"])
+                return await _send_error(mystic, message, _["play_3"])
             
             vidid = details.get("vidid")
             link = details.get("link") 
@@ -295,11 +373,11 @@ async def play_commnd(
             # Check if we have at least a video ID or a link
             if not vidid and not link:
                 print(f"No video ID or link found for query: {query}")
-                return await mystic.edit_text(_["play_3"])
+                return await _send_error(mystic, message, _["play_3"])
                 
         except Exception as err:
             logging.error("Exception in YouTube.track for slider: %s", err, exc_info=True)
-            return await mystic.edit_text(_["play_3"])
+            return await _send_error(mystic, message, _["play_3"])
         streamtype = "youtube"
     if str(playmode) == "Direct":
         if not plist_type:
@@ -308,7 +386,8 @@ async def play_commnd(
             if duration_min and duration_min != "Live" and duration_min != "0:00":
                 duration_sec = time_to_seconds(duration_min)
                 if duration_sec > config.DURATION_LIMIT:
-                    return await mystic.edit_text(
+                    return await _send_error(
+                        mystic, message,
                         _["play_6"].format(config.DURATION_LIMIT_MIN, app.mention)
                     )
             elif duration_min == "Live":
@@ -321,12 +400,20 @@ async def play_commnd(
                     "c" if channel else "g",
                     "f" if fplay else "d",
                 )
-                return await mystic.edit_text(
-                    _["play_13"],
-                    reply_markup=InlineKeyboardMarkup(buttons),
-                )
+                if mystic:
+                    return await mystic.edit_text(
+                        _["play_13"],
+                        reply_markup=InlineKeyboardMarkup(buttons),
+                    )
+                else:
+                    return await message.reply_text(
+                        _["play_13"],
+                        reply_markup=InlineKeyboardMarkup(buttons),
+                    )
             # For "0:00" or other durations, continue with normal playback
         try:
+            print(f"[PLAY] Starting stream - Details: {details}")
+            print(f"[PLAY] Streamtype: {streamtype}, Video: {video}, Chat ID: {chat_id}")
             await stream(
                 _,
                 mystic,
@@ -339,11 +426,24 @@ async def play_commnd(
                 streamtype=streamtype,
                 spotify=spotify,
                 forceplay=fplay,
+                sticker_key=sticker_key,
             )
+            print(f"[PLAY] Stream completed successfully")
         except Exception as e:
             logging.error("Exception in direct stream: %s", e, exc_info=True)
-            return await mystic.edit_text(_["general_2"].format(type(e).__name__))
-        await mystic.delete()
+            print(f"[PLAY] Stream exception: {type(e).__name__}: {e}")
+            try:
+                await _delete_placeholder_sticker(app, sticker_key)
+            except Exception:
+                pass
+            error_msg = str(e) if str(e) else type(e).__name__
+            return await _send_error(mystic, message, f"<blockquote>❌ <b>Failed to play:</b>\n{error_msg}</blockquote>")
+        if mystic:
+            await mystic.delete()
+        try:
+            await _delete_placeholder_sticker(app, sticker_key)
+        except Exception:
+            pass
         return await play_logs(message, streamtype=streamtype)
     else:
         if plist_type:
@@ -359,12 +459,17 @@ async def play_commnd(
                 "c" if channel else "g",
                 "f" if fplay else "d",
             )
-            await mystic.delete()
+            if mystic:
+                await mystic.delete()
             await message.reply_photo(
                 photo=img,
                 caption=cap,
                 reply_markup=InlineKeyboardMarkup(buttons),
             )
+            try:
+                await _delete_placeholder_sticker(app, sticker_key)
+            except Exception:
+                pass
             return await play_logs(message, streamtype=f"Playlist : {plist_type}")
         else:
             if slider:
@@ -377,7 +482,8 @@ async def play_commnd(
                     "c" if channel else "g",
                     "f" if fplay else "d",
                 )
-                await mystic.delete()
+                if mystic:
+                    await mystic.delete()
                 photo = safe_get(details, "thumb") or safe_get(details, "thumbnail") or config.PLAYLIST_IMG_URL
                 title = safe_get(details, "title", "Unknown Title")
                 duration_min = safe_get(details, "duration_min", "0:00")
@@ -389,6 +495,10 @@ async def play_commnd(
                     ),
                     reply_markup=InlineKeyboardMarkup(buttons),
                 )
+                try:
+                    await _delete_placeholder_sticker(app, sticker_key)
+                except Exception:
+                    pass
                 return await play_logs(message, streamtype=f"Searched on Youtube")
             else:
                 buttons = track_markup(
@@ -398,11 +508,16 @@ async def play_commnd(
                     "c" if channel else "g",
                     "f" if fplay else "d",
                 )
-                await mystic.delete()
+                if mystic:
+                    await mystic.delete()
                 await message.reply_photo(
                     photo=img,
                     caption=cap,
                     reply_markup=InlineKeyboardMarkup(buttons),
                 )
+                try:
+                    await _delete_placeholder_sticker(app, sticker_key)
+                except Exception:
+                    pass
                 return await play_logs(message, streamtype=f"URL Searched Inline")
 

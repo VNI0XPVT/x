@@ -34,9 +34,16 @@ async def init():
         pass
     await sudo()
     await app.start()
+    LOGGER("Dolbymusic.plugins").info(f"Loading {len(ALL_MODULES)} modules...")
+    loaded_count = 0
     for all_module in ALL_MODULES:
-        importlib.import_module("Dolbymusic.plugins" + all_module)
-    LOGGER("Dolbymusic.plugins").info("Successfully Imported Modules...")
+        try:
+            importlib.import_module("Dolbymusic.plugins" + all_module)
+            loaded_count += 1
+            LOGGER("Dolbymusic.plugins").info(f"✓ Loaded: {all_module}")
+        except Exception as e:
+            LOGGER("Dolbymusic.plugins").error(f"✗ Failed to load {all_module}: {e}")
+    LOGGER("Dolbymusic.plugins").info(f"Successfully Imported {loaded_count}/{len(ALL_MODULES)} Modules...")
     await userbot.start()
     await AyushSolo.start()
     try:

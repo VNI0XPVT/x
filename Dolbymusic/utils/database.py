@@ -652,3 +652,63 @@ async def remove_banned_user(user_id: int):
     if not is_gbanned:
         return
     return await blockeddb.delete_one({"user_id": user_id})
+
+
+# AFK System
+afkdb = mongodb.afk
+
+
+async def is_afk(user_id: int) -> tuple:
+    """Check if user is AFK and return status with reason data"""
+    user = await afkdb.find_one({"user_id": user_id})
+    if not user:
+        return False, {}
+    return True, user
+
+
+async def add_afk(user_id: int, details: dict):
+    """Set user as AFK with details"""
+    await afkdb.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "user_id": user_id,
+            "type": details["type"],
+            "time": details["time"],
+            "data": details["data"],
+            "reason": details["reason"]
+        }},
+        upsert=True
+    )
+
+
+async def remove_afk(user_id: int):
+    """Remove user from AFK status"""
+    user = await afkdb.find_one({"user_id": user_id})
+    if user:
+        return await afkdb.delete_one({"user_id": user_id})
+
+
+# Welcome System
+welcomedb = mongodb.welcome
+
+
+async def get_welcome(chat_id: int) -> bool:
+    """Check if welcome is enabled for chat"""
+    chat = await welcomedb.find_one({"chat_id": chat_id})
+    if not chat:
+        return True  # Default enabled
+    return chat.get("enabled", True)
+
+
+async def set_welcome(chat_id: int, enabled: bool):
+    """Enable/disable welcome for chat"""
+    await welcomedb.update_one(
+        {"chat_id": chat_id},
+        {"$set": {"chat_id": chat_id, "enabled": enabled}},
+        upsert=True
+    )
+
+
+async def remove_welcome(chat_id: int):
+    """Disable welcome for chat"""
+    await set_welcome(chat_id, False)
