@@ -6,6 +6,7 @@ from pyrogram.errors import (
     InviteRequestSent,
     UserAlreadyParticipant,
     UserNotParticipant,
+    PeerIdInvalid,
 )
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -118,9 +119,25 @@ def PlayWrapper(command):
             try:
                 try:
                     get = await app.get_chat_member(chat_id, userbot.id)
+                except PeerIdInvalid:
+                    # Peer not cached yet, try to join the chat to cache it
+                    try:
+                        await userbot.join_chat(message.chat.username or message.chat.id)
+                    except (UserAlreadyParticipant, InviteRequestSent):
+                        pass
+                    except Exception:
+                        pass
+                    # Retry getting member status
+                    try:
+                        get = await app.get_chat_member(chat_id, userbot.id)
+                    except Exception:
+                        # If still fails, assume userbot needs to join
+                        pass
                 except ChatAdminRequired:
                     return await message.reply_text(_["call_1"])
-                if (
+                
+                # Check status only if we successfully got the member
+                if 'get' in locals() and (
                     get.status == ChatMemberStatus.BANNED
                     or get.status == ChatMemberStatus.RESTRICTED
                 ):
