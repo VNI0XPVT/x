@@ -290,7 +290,7 @@ async def gen_thumb(videoid, user_id):
         try:
             youtube = Image.open(os.path.join(cache_dir, f"thumb{videoid}.png"))
             # Prefer a custom Dolby thumbnail asset if present, otherwise use morningx.png
-            dolby_asset = "Dolbymusic/assets/Dolby_thumb.png"
+            dolby_asset = "Dolbymusic/assets/dolby_thumb.png .png"
             bg_path = "Dolbymusic/assets/morningx.png"
             if os.path.exists(dolby_asset):
                 bg = Image.open(dolby_asset)
@@ -663,7 +663,7 @@ async def gen_qthumb(videoid, user_id):
             youtube = Image.open(os.path.join(cache_dir, f"thumb{videoid}.png"))
             bg_path = "Dolbymusic/assets/morningx.png"
             # Prefer a custom Dolby thumbnail asset if present (same handling for queue)
-            dolby_asset = "Dolbymusic/assets/Dolby_thumb.png"
+            dolby_asset = "Dolbymusic/assets/dolby_thumb.png .png"
             if os.path.exists(dolby_asset):
                 bg = Image.open(dolby_asset)
             elif os.path.exists(bg_path):
