@@ -85,18 +85,15 @@ async def greet_group(_, member: ChatMemberUpdated):
             member.chat.id,
             photo=welcomeimg,
             caption=f"""<blockquote>
-◈━━━━━━𝐇𝐞𝐲™🎫━━━━━━◈            
-Wᴇʟᴄᴏᴍᴇ Tᴏ {member.chat.title}
+𝐖ᴇʟᴄᴏᴍᴇ 𝐓ᴏ {member.chat.title}
 ➖➖➖➖➖➖➖➖➖➖➖
-Nᴀᴍᴇ ✧ {user.mention}
-Iᴅ ✧ {user.id}
-Usᴇʀɴᴀᴍᴇ ✧ @{user.username or 'None'}
+𝐍ᴀᴍᴇ ✧ {user.mention}
+𝐈ᴅ ✧ {user.id}
+𝐔sᴇʀɴᴀᴍᴇ ✧ @{user.username or 'None'}
 ➖➖➖➖➖➖➖➖➖➖➖
-✨║𝐑𝐔𝐋𝐄𝐒┣┈•✤ /rules 
-ᴘʟᴇᴀsᴇ ғᴏʟʟᴏᴡ ᴛʜᴇ ɢʀᴏᴜᴘ ʀᴜʟᴇs​🥺
-✨║𝐓𝐀𝐆┣┈•✤  /tag 
-✦𝐔𝐒𝐄 ᴛʜɪs ᴛᴀɢ ᴛᴏ sᴛᴀʏ ᴄᴏɴɴᴇᴄᴛᴇᴅ
-━━━━━━━━━━━━━━━━━━━</blockquote>
+𝐏ʟᴇᴀsᴇ 𝐅ᴏʟʟᴏᴡ 𝐓ʜᴇ 𝐆ʀᴏᴜᴘ 𝐑ᴜʟᴇs​
+𝐒ᴛᴀʏ 𝐂ᴏɴɴᴇᴄᴛᴇᴅ
+</blockquote>
 """,
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"⦿ ᴀᴅᴅ ᴍᴇ ⦿", url=f"https://t.me/{app.username}?startgroup=true")]])
         )
