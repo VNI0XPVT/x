@@ -205,18 +205,16 @@ class YouTubeAPI:
             except:
                 del self._session_cache[url]
 
-        # Create new session with random configuration
-        yt = PyTubeYT(
-            url,
-            use_oauth=False,
-            allow_oauth_cache=False,
-            use_po_token=True,
-            client=random.choice(self.clients),
-            headers={
-                'User-Agent': random.choice(self.user_agents),
-                'Accept-Language': 'en-US,en;q=0.9'
-            }
-        )
+        # Create new session - use simple initialization for compatibility
+        try:
+            yt = PyTubeYT(
+                url,
+                use_oauth=False,
+                allow_oauth_cache=False
+            )
+        except TypeError:
+            # Fallback for older PyTube versions
+            yt = PyTubeYT(url)
 
         # Test connection
         if not yt.video_id:
