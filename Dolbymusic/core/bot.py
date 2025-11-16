@@ -27,6 +27,7 @@ class AyushSolo(Client):
         self.mention = self.me.mention
 
         try:
+            LOGGER(__name__).info(f"Attempting to send message to LOGGER_ID: {config.LOGGER_ID}")
             await self.send_message(config.LOGGER_ID, "Bot Started")
         except errors.ChannelInvalid:
             LOGGER(__name__).error(
@@ -40,16 +41,23 @@ class AyushSolo(Client):
             exit()
         except Exception as ex:
             LOGGER(__name__).error(
-                f"Bot has failed to access the log group/channel.\n  Reason : {type(ex).__name__}."
+                f"Bot has failed to access the log group/channel.\n  Reason : {type(ex).__name__}: {ex}"
             )
             exit()
 
-        a = await self.get_chat_member(config.LOGGER_ID, self.id)
-        if a.status != ChatMemberStatus.ADMINISTRATOR:
-            LOGGER(__name__).error(
-                "Please promote your bot as an admin in your log group/channel."
-            )
+        try:
+            LOGGER(__name__).info(f"Checking admin status in LOGGER_ID: {config.LOGGER_ID}")
+            a = await self.get_chat_member(config.LOGGER_ID, self.id)
+            LOGGER(__name__).info(f"Bot status in logger group: {a.status}")
+            if a.status != ChatMemberStatus.ADMINISTRATOR:
+                LOGGER(__name__).error(
+                    f"Please promote your bot as an admin in your log group/channel. Current status: {a.status}"
+                )
+                exit()
+        except Exception as ex:
+            LOGGER(__name__).error(f"Failed to check admin status: {type(ex).__name__}: {ex}")
             exit()
+            
         LOGGER(__name__).info(f"Music Bot Started as {self.name}")
 
     async def stop(self):
