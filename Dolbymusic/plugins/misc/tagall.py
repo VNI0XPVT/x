@@ -1,7 +1,7 @@
 import asyncio
 import random
 from pyrogram import filters
-from pyrogram.enums import ChatType
+from pyrogram.enums import ChatType, ChatMemberStatus
 from pyrogram.types import Message
 
 from config import BANNED_USERS
@@ -18,7 +18,7 @@ async def is_admin_or_owner(client, chat_id, user_id):
     """Check if user is admin or owner of the chat"""
     try:
         member = await client.get_chat_member(chat_id, user_id)
-        return member.status in ["administrator", "creator"]
+        return member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]
     except:
         return False
 
