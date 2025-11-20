@@ -13,6 +13,16 @@ LOGGER(__name__).info("Tagall Plugin Loaded")
 # Global spam control
 spam_chats = []
 
+
+async def is_admin_or_owner(client, chat_id, user_id):
+    """Check if user is admin or owner of the chat"""
+    try:
+        member = await client.get_chat_member(chat_id, user_id)
+        return member.status in ["administrator", "creator"]
+    except:
+        return False
+
+
 EMOJI = [
     "💖💖💖💖💖",
     "🌸✨💧🍬☕️",
@@ -180,9 +190,11 @@ async def mentionall(client, message: Message):
     if message.chat.type == ChatType.PRIVATE:
         return await message.reply("<blockquote>𝐓𝐡𝐢𝐬 𝐜𝐨𝐦𝐦𝐚𝐧𝐝 𝐢𝐬 𝐨𝐧𝐥𝐲 𝐟𝐨𝐫 𝐠𝐫𝐨𝐮𝐩𝐬 (●'◡'●)</blockquote>")
 
-    # Check sudo users
+    # Check if user is sudo or admin/owner
     sudo_users = await get_sudoers()
-    if message.from_user.id not in sudo_users:
+    is_admin = await is_admin_or_owner(client, chat_id, message.from_user.id)
+    
+    if message.from_user.id not in sudo_users and not is_admin:
         return await message.reply(
             "<blockquote>💫 𝐘𝐨𝐮 𝐚𝐫𝐞 𝐧𝐨𝐭 𝐚𝐮𝐭𝐡𝐨𝐫𝐢𝐳𝐞𝐝 𝐭𝐨 𝐮𝐬𝐞 𝐭𝐡𝐢𝐬 𝐜𝐨𝐦𝐦𝐚𝐧𝐝 💫</blockquote>"
         )
@@ -253,9 +265,11 @@ async def mention_allvc(client, message: Message):
     if message.chat.type == ChatType.PRIVATE:
         return await message.reply("<blockquote>𝐓𝐡𝐢𝐬 𝐜𝐨𝐦𝐦𝐚𝐧𝐝 𝐢𝐬 𝐨𝐧𝐥𝐲 𝐟𝐨𝐫 𝐠𝐫𝐨𝐮𝐩𝐬.💞</blockquote>")
 
-    # Check sudo users
+    # Check if user is sudo or admin/owner
     sudo_users = await get_sudoers()
-    if message.from_user.id not in sudo_users:
+    is_admin = await is_admin_or_owner(client, chat_id, message.from_user.id)
+    
+    if message.from_user.id not in sudo_users and not is_admin:
         return await message.reply(
             "<blockquote>💫 𝐘𝐨𝐮 𝐚𝐫𝐞 𝐧𝐨𝐭 𝐚𝐮𝐭𝐡𝐨𝐫𝐢𝐳𝐞𝐝 𝐭𝐨 𝐮𝐬𝐞 𝐭𝐡𝐢𝐬 𝐜𝐨𝐦𝐦𝐚𝐧𝐝 💫</blockquote>"
         )
@@ -298,9 +312,11 @@ async def cancel_spam(client, message: Message):
     if message.chat.id not in spam_chats:
         return await message.reply("<blockquote>𝐂𝐮𝐫𝐫𝐞𝐧𝐭𝐥𝐲 𝐈'𝐦 𝐍𝐨𝐭 𝐓𝐚𝐠𝐠𝐢𝐧𝐠 𝐁𝐚𝐛𝐲.🥰</blockquote>")
 
-    # Check sudo users
+    # Check if user is sudo or admin/owner
     sudo_users = await get_sudoers()
-    if message.from_user.id not in sudo_users:
+    is_admin = await is_admin_or_owner(client, message.chat.id, message.from_user.id)
+    
+    if message.from_user.id not in sudo_users and not is_admin:
         return await message.reply(
             "<blockquote>🥺 𝐘𝐨𝐮 𝐚𝐫𝐞 𝐧𝐨𝐭 𝐚𝐮𝐭𝐡𝐨𝐫𝐢𝐳𝐞𝐝 𝐭𝐨 𝐬𝐭𝐨𝐩 𝐭𝐡𝐞 𝐭𝐚𝐠𝐠𝐢𝐧𝐠 𝐩𝐫𝐨𝐜𝐞𝐬𝐬</blockquote>"
         )
@@ -310,3 +326,5 @@ async def cancel_spam(client, message: Message):
     except:
         pass
     return await message.reply("<blockquote>💫 𝐌𝐞𝐧𝐭𝐢𝐨𝐧 𝐩𝐫𝐨𝐜𝐞𝐬𝐬 𝐬𝐭𝐨𝐩𝐩𝐞𝐝 💫</blockquote>")
+
+
