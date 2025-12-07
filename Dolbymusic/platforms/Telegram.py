@@ -42,13 +42,6 @@ class TeleAPI:
             file_name = "ᴛᴇʟᴇɢʀᴀᴍ ᴀᴜᴅɪᴏ" if audio else "ᴛᴇʟᴇɢʀᴀᴍ ᴠɪᴅᴇᴏ"
         return file_name
 
-    async def get_duration(self, file):
-        try:
-            dur = seconds_to_min(file.duration)
-        except:
-            dur = "Unknown"
-        return dur
-
     async def get_duration(self, filex, file_path):
         try:
             dur = seconds_to_min(filex.duration)
@@ -92,20 +85,43 @@ class TeleAPI:
         return file_name
 
     async def download(self, _, message, mystic, fname):
+        """
+        Download Telegram media with safe handling for NoneType mystic.
+        Prevents crashes:
+        - mystic.id → NoneType error
+        - mystic.edit_text → NoneType error
+        """
+
+        # ------------------------------------------------------------------
+        # FIX 1: Ensure mystic ALWAYS exists
+        # ------------------------------------------------------------------
+        if mystic is None:
+            try:
+                mystic = await message.reply_text("Downloading...")
+            except:
+                mystic = None  # still allow flow
+
         lower = [0, 8, 17, 38, 64, 77, 96]
         higher = [5, 10, 20, 40, 66, 80, 99]
         checker = [5, 10, 20, 40, 66, 80, 99]
         speed_counter = {}
+
         if os.path.exists(fname):
             return True
 
         async def down_load():
             async def progress(current, total):
+                # If mystic failed to create, skip UI updates safely
+                if mystic is None:
+                    return
+
                 if current == total:
                     return
+
                 current_time = time.time()
-                start_time = speed_counter.get(message.id)
-                check_time = current_time - start_time
+                start_time = speed_counter.get(message.id, current_time)
+                check_time = max(current_time - start_time, 1)
+
                 upl = InlineKeyboardMarkup(
                     [
                         [
@@ -116,61 +132,82 @@ class TeleAPI:
                         ]
                     ]
                 )
+
                 percentage = current * 100 / total
-                percentage = str(round(percentage, 2))
+                percentage_int = int(percentage)
+
                 speed = current / check_time
-                eta = int((total - current) / speed)
+                eta = int((total - current) / max(speed, 1))
                 eta = get_readable_time(eta)
-                if not eta:
-                    eta = "0 sᴇᴄᴏɴᴅs"
+
                 total_size = convert_bytes(total)
                 completed_size = convert_bytes(current)
                 speed = convert_bytes(speed)
-                percentage = int((percentage.split("."))[0])
+
+                # Progress update logic
                 for counter in range(7):
-                    low = int(lower[counter])
-                    high = int(higher[counter])
-                    check = int(checker[counter])
-                    if low < percentage <= high:
+                    low = lower[counter]
+                    high = higher[counter]
+                    check = checker[counter]
+
+                    if low < percentage_int <= high:
                         if high == check:
-                            try:
-                                await mystic.edit_text(
-                                    text=_["tg_1"].format(
-                                        app.mention,
-                                        total_size,
-                                        completed_size,
-                                        percentage[:5],
-                                        speed,
-                                        eta,
-                                    ),
-                                    reply_markup=upl,
-                                )
-                                checker[counter] = 100
-                            except:
-                                pass
+                            if mystic:
+                                try:
+                                    await mystic.edit_text(
+                                        text=_["tg_1"].format(
+                                            app.mention,
+                                            total_size,
+                                            completed_size,
+                                            percentage_int,
+                                            speed,
+                                            eta,
+                                        ),
+                                        reply_markup=upl,
+                                    )
+                                except:
+                                    pass
+                            checker[counter] = 100
 
             speed_counter[message.id] = time.time()
+
             try:
                 await app.download_media(
                     message.reply_to_message,
                     file_name=fname,
                     progress=progress,
                 )
-                try:
-                    elapsed = get_readable_time(
-                        int(int(time.time()) - int(speed_counter[message.id]))
-                    )
-                except:
-                    elapsed = "0 sᴇᴄᴏɴᴅs"
-                await mystic.edit_text(_["tg_2"].format(elapsed))
-            except:
-                await mystic.edit_text(_["tg_3"])
+
+                elapsed = get_readable_time(
+                    int(time.time() - speed_counter.get(message.id, time.time()))
+                )
+
+                if mystic:
+                    try:
+                        await mystic.edit_text(_["tg_2"].format(elapsed))
+                    except:
+                        pass
+
+            except Exception:
+                if mystic:
+                    try:
+                        await mystic.edit_text(_["tg_3"])
+                    except:
+                        pass
+
+        # ------------------------------------------------------------------
+        # FIX 2: Safe lyrical dictionary key
+        # ------------------------------------------------------------------
+        lyrical_key = mystic.id if mystic else message.id
 
         task = asyncio.create_task(down_load())
-        config.lyrical[mystic.id] = task
+        config.lyrical[lyrical_key] = task
+
         await task
-        verify = config.lyrical.get(mystic.id)
+
+        verify = config.lyrical.get(lyrical_key)
         if not verify:
             return False
-        config.lyrical.pop(mystic.id)
+
+        config.lyrical.pop(lyrical_key, None)
         return True
