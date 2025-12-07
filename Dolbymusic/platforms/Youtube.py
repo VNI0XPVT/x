@@ -6,7 +6,6 @@ import httpx
 
 from pyrogram.enums import MessageEntityType
 from pyrogram.types import Message
-from youtubesearchpython.__future__ import VideosSearch
 
 
 def time_to_seconds(time_str):
@@ -38,29 +37,55 @@ class YouTubeAPI:
         self.listbase = "https://youtube.com/playlist?list="
         self.reg = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
-    # ------------------------------------------------------------------------------------
-    # UNIVERSAL FIX – FILTER OUT BROKEN RESULTS FROM youtubesearchpython
-    # ------------------------------------------------------------------------------------
-    async def safe_results(self, results):
-        """Return only valid search results and skip corrupted ones."""
+    # -------------------------------------------------------------------------
+    # INTERNAL HELPERS USING YOUR OWN API
+    # -------------------------------------------------------------------------
+    async def _search_first(self, query: str) -> Optional[dict]:
+        """
+        Call /search on your API:
+        Returns dict with {id, title, url} or None.
+        Works for:
+        - plain text: "pal pal"
+        - URLs
+        - video IDs
+        """
         try:
-            raw = (await results.next()).get("result", [])
+            async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+                r = await client.get(
+                    f"{API_BASE_URL}/search",
+                    params={"q": query, "api_key": API_KEY},
+                )
+                if r.status_code != 200:
+                    return None
+                data = r.json()
+                vid = data.get("id")
+                if not vid:
+                    return None
+                return {
+                    "id": vid,
+                    "title": data.get("title") or vid,
+                    "url": data.get("url") or f"https://www.youtube.com/watch?v={vid}",
+                }
         except Exception:
-            return []
+            return None
 
-        safe = []
-        for r in raw:
-            try:
-                channel_id = r.get("channel", {}).get("id")
-                if not channel_id:
-                    continue  # SKIP corrupt entries
-                safe.append(r)
-            except:
-                continue
+    async def _info(self, video_id: str) -> dict:
+        """
+        Call /info to get metadata like duration/title/thumbnail.
+        """
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+                r = await client.get(
+                    f"{API_BASE_URL}/info",
+                    params={"video_id": video_id, "api_key": API_KEY},
+                )
+                if r.status_code != 200:
+                    return {}
+                return r.json() or {}
+        except Exception:
+            return {}
 
-        return safe
-
-    # ------------------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     async def exists(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
             link = self.base + link
@@ -88,122 +113,144 @@ class YouTubeAPI:
                         return entity.url
         if offset in (None,):
             return None
-        return text[offset : offset + length]
+        return text[offset: offset + length]
 
-    # ------------------------------------------------------------------------------------
-    # FIXED DETAILS()
-    # ------------------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
+    # DETAILS
+    # -------------------------------------------------------------------------
     async def details(self, link: str, videoid: Union[bool, str] = None):
+        """
+        Returns: title, duration_min (str), duration_sec (int), thumbnail, vidid
+        """
+        # We can just use /search with whatever user typed: query, URL or ID
         if videoid:
             link = self.base + link
         link = link.split("&")[0]
 
-        results = VideosSearch(link, limit=1)
-        safe = await self.safe_results(results)
-        if not safe:
+        search = await self._search_first(link)
+        if not search:
             return None, None, 0, None, None
 
-        result = safe[0]
+        vidid = search["id"]
+        info = await self._info(vidid)
 
-        title = result["title"]
-        duration_min = result["duration"]
-        thumbnail = result["thumbnails"][0]["url"].split("?")[0]
-        vidid = result["id"]
-        duration_sec = time_to_seconds(duration_min)
+        title = info.get("title") or search["title"]
+        duration_min = info.get("duration")
+        if not duration_min:
+            duration_sec = 0
+        else:
+            duration_sec = time_to_seconds(duration_min)
+
+        thumbnail = info.get("thumbnail") or f"https://i.ytimg.com/vi/{vidid}/hqdefault.jpg"
 
         return title, duration_min, duration_sec, thumbnail, vidid
 
-    # ------------------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     async def title(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
             link = self.base + link
         link = link.split("&")[0]
 
-        results = VideosSearch(link, limit=1)
-        safe = await self.safe_results(results)
-        if not safe:
+        search = await self._search_first(link)
+        if not search:
             return None
-        return safe[0]["title"]
 
-    # ------------------------------------------------------------------------------------
+        info = await self._info(search["id"])
+        return info.get("title") or search["title"]
+
+    # -------------------------------------------------------------------------
     async def duration(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
             link = self.base + link
         link = link.split("&")[0]
 
-        results = VideosSearch(link, limit=1)
-        safe = await self.safe_results(results)
-        if not safe:
+        search = await self._search_first(link)
+        if not search:
             return None
-        return safe[0]["duration"]
+        info = await self._info(search["id"])
+        return info.get("duration")
 
-    # ------------------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     async def thumbnail(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
             link = self.base + link
         link = link.split("&")[0]
 
-        results = VideosSearch(link, limit=1)
-        safe = await self.safe_results(results)
-        if not safe:
+        search = await self._search_first(link)
+        if not search:
             return None
-        return safe[0]["thumbnails"][0]["url"].split("?")[0]
+        vidid = search["id"]
+        info = await self._info(vidid)
+        return info.get("thumbnail") or f"https://i.ytimg.com/vi/{vidid}/hqdefault.jpg"
 
-    # ------------------------------------------------------------------------------------
-    # FIXED TRACK()
-    # ------------------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
+    # TRACK
+    # -------------------------------------------------------------------------
     async def track(self, link: str, videoid: Union[bool, str] = None):
+        """
+        Used by /play etc.
+        Returns (track_details dict, vidid)
+        """
         if videoid:
             link = self.base + link
         link = link.split("&")[0]
 
-        results = VideosSearch(link, limit=1)
-        safe = await self.safe_results(results)
-        if not safe:
+        search = await self._search_first(link)
+        if not search:
             return None, None
 
-        result = safe[0]
+        vidid = search["id"]
+        info = await self._info(vidid)
+
+        title = info.get("title") or search["title"]
+        duration_min = info.get("duration")
+        thumb = info.get("thumbnail") or f"https://i.ytimg.com/vi/{vidid}/hqdefault.jpg"
 
         track_details = {
-            "title": result["title"],
-            "link": result["link"],
-            "vidid": result["id"],
-            "duration_min": result["duration"],
-            "thumb": result["thumbnails"][0]["url"].split("?")[0],
+            "title": title,
+            "link": search["url"],
+            "vidid": vidid,
+            "duration_min": duration_min,
+            "thumb": thumb,
         }
-        return track_details, result["id"]
+        return track_details, vidid
 
-    # ------------------------------------------------------------------------------------
-    # FIXED SLIDER()
-    # ------------------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
+    # SLIDER
+    # (We just return the best match; query_type is ignored safely)
+    # -------------------------------------------------------------------------
     async def slider(self, link, query_type, videoid: Union[bool, str] = None):
         if videoid:
             link = self.base + link
         link = link.split("&")[0]
 
-        results = VideosSearch(link, limit=10)
-        safe = await self.safe_results(results)
-
-        if not safe or query_type >= len(safe):
+        search = await self._search_first(link)
+        if not search:
             return None, None, None, None
 
-        result = safe[query_type]
-        title = result["title"]
-        duration = result["duration"]
-        thumb = result["thumbnails"][0]["url"].split("?")[0]
-        vidid = result["id"]
+        vidid = search["id"]
+        info = await self._info(vidid)
+
+        title = info.get("title") or search["title"]
+        duration = info.get("duration")
+        thumb = info.get("thumbnail") or f"https://i.ytimg.com/vi/{vidid}/hqdefault.jpg"
 
         return title, duration, thumb, vidid
 
-    # ------------------------------------------------------------------------------------
-    # STREAM / PLAYBACK URL BUILDERS
-    # ------------------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
+    # STREAM / PLAYBACK URL BUILDERS (unchanged)
+    # -------------------------------------------------------------------------
     async def video(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
             link = self.base + link
         link = link.split("&")[0]
 
-        vid = link.split("v=")[-1].split("&")[0] if "v=" in link else link.split("/")[-1]
+        # We can still extract ID locally, since /download endpoints expect video_id
+        if "v=" in link:
+            vid = link.split("v=")[-1].split("&")[0]
+        else:
+            vid = link.split("/")[-1].split("?")[0]
+
         stream_url = f"{API_BASE_URL}/download/video?video_id={vid}&mode=stream&max_res=720&api_key={API_KEY}"
         return 1, stream_url
 
@@ -212,15 +259,18 @@ class YouTubeAPI:
             link = self.base + link
         link = link.split("&")[0]
 
-        vid = link.split("v=")[-1].split("&")[0] if "v=" in link else link.split("/")[-1]
+        if "v=" in link:
+            vid = link.split("v=")[-1].split("&")[0]
+        else:
+            vid = link.split("/")[-1].split("?")[0]
 
         if video:
             return f"{API_BASE_URL}/download/video?video_id={vid}&max_res=720&api_key={API_KEY}"
         return f"{API_BASE_URL}/download/audio?video_id={vid}&api_key={API_KEY}"
 
-    # ------------------------------------------------------------------------------------
-    # PLAYLIST PARSE
-    # ------------------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
+    # PLAYLIST PARSE (unchanged, still uses your API)
+    # -------------------------------------------------------------------------
     async def playlist(self, link, limit, user_id, videoid=False):
         if videoid:
             link = self.listbase + link
@@ -240,9 +290,9 @@ class YouTubeAPI:
 
         return []
 
-    # ------------------------------------------------------------------------------------
-    # DOWNLOAD FUNCTION (UNCHANGED BUT CLEANED)
-    # ------------------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
+    # DOWNLOAD FUNCTION (same behavior, just uses your API)
+    # -------------------------------------------------------------------------
     async def download(
         self,
         link: str,
@@ -257,7 +307,10 @@ class YouTubeAPI:
         if videoid:
             link = self.base + link
 
-        vid = link.split("v=")[-1].split("&")[0] if "v=" in link else link.split("/")[-1]
+        if "v=" in link:
+            vid = link.split("v=")[-1].split("&")[0]
+        else:
+            vid = link.split("/")[-1].split("?")[0]
 
         # USE STREAMING MODE FOR LONG VIDEOS
         duration_seconds = 0
@@ -268,9 +321,9 @@ class YouTubeAPI:
                     duration_str = r.json().get("duration", "0:0")
                     parts = duration_str.split(":")
                     if len(parts) == 3:
-                        duration_seconds = int(parts[0])*3600 + int(parts[1])*60 + int(parts[2])
+                        duration_seconds = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
                     elif len(parts) == 2:
-                        duration_seconds = int(parts[0])*60 + int(parts[1])
+                        duration_seconds = int(parts[0]) * 60 + int(parts[1])
                     else:
                         duration_seconds = int(parts[0])
         except:
@@ -282,10 +335,9 @@ class YouTubeAPI:
                 return f"{API_BASE_URL}/download/video?video_id={vid}&max_res=720&api_key={API_KEY}"
             return f"{API_BASE_URL}/download/audio?video_id={vid}&api_key={API_KEY}"
 
-        # -----------------------------------------------------------------------------
+        # ---------------------------------------------------------------------
         # SHORT VIDEO DOWNLOADS
-        # -----------------------------------------------------------------------------
-
+        # ---------------------------------------------------------------------
         async def api_download_audio():
             try:
                 async with httpx.AsyncClient(follow_redirects=True, timeout=600) as client:
@@ -304,7 +356,7 @@ class YouTubeAPI:
                         if r.status_code != 200:
                             return None
                         with open(filepath, "wb") as f:
-                            async for chunk in r.aiter_bytes(1024*128):
+                            async for chunk in r.aiter_bytes(1024 * 128):
                                 f.write(chunk)
 
                     return filepath
@@ -315,7 +367,13 @@ class YouTubeAPI:
             try:
                 async with httpx.AsyncClient(follow_redirects=True, timeout=600) as client:
                     url = f"{API_BASE_URL}/download/video"
-                    params = {"video_id": vid, "mode": "download", "no_redirect": "1", "max_res": "720", "api_key": API_KEY}
+                    params = {
+                        "video_id": vid,
+                        "mode": "download",
+                        "no_redirect": "1",
+                        "max_res": "720",
+                        "api_key": API_KEY,
+                    }
 
                     info = await client.get(f"{API_BASE_URL}/info", params={"video_id": vid, "api_key": API_KEY})
                     file_title = info.json().get("title", vid) if info.status_code == 200 else vid
@@ -329,7 +387,7 @@ class YouTubeAPI:
                         if r.status_code != 200:
                             return None
                         with open(filepath, "wb") as f:
-                            async for chunk in r.aiter_bytes(1024*128):
+                            async for chunk in r.aiter_bytes(1024 * 128):
                                 f.write(chunk)
 
                     return filepath
