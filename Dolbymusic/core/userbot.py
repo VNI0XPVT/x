@@ -65,7 +65,7 @@ class Userbot(Client):
         if config.STRING1:
             await self.one.start()
             try:
-                await self.one.join_chat("x_support_chat")
+                await self.one.join_chat("NOBITA_SUPPORT")
                 await self.one.join_chat(config.SUPPORT_CHANNEL)
             except:
                 pass
@@ -86,7 +86,7 @@ class Userbot(Client):
         if config.STRING2:
             await self.two.start()
             try:
-                await self.two.join_chat("x_support_chat")
+                await self.two.join_chat("NOBITA_SUPPORT")
                 await self.two.join_chat(config.SUPPORT_CHANNEL)
             except:
                 pass
@@ -107,7 +107,7 @@ class Userbot(Client):
         if config.STRING3:
             await self.three.start()
             try:
-                await self.three.join_chat("x_support_chat")
+                await self.three.join_chat("NOBITA_SUPPORT")
                 await self.three.join_chat(config.SUPPORT_CHANNEL)
             except:
                 pass
@@ -128,7 +128,7 @@ class Userbot(Client):
         if config.STRING4:
             await self.four.start()
             try:
-                await self.four.join_chat("x_support_chat")
+                await self.four.join_chat("NOBITA_SUPPORT")
                 await self.four.join_chat(config.SUPPORT_CHANNEL)
             except:
                 pass
@@ -149,7 +149,7 @@ class Userbot(Client):
         if config.STRING5:
             await self.five.start()
             try:
-                await self.five.join_chat("x_support_chat")
+                await self.five.join_chat("NOBITA_SUPPORT")
                 await self.five.join_chat(config.SUPPORT_CHANNEL)
             except:
                 pass
@@ -170,7 +170,7 @@ class Userbot(Client):
         if config.STRING6:
             await self.six.start()
             try:
-                await self.six.join_chat("x_support_chat")
+                await self.six.join_chat("NOBITA_SUPPORT")
                 await self.six.join_chat(config.SUPPORT_CHANNEL)
             except:
                 pass
@@ -191,7 +191,7 @@ class Userbot(Client):
         if config.STRING7:
             await self.seven.start()
             try:
-                await self.seven.join_chat("x_support_chat")
+                await self.seven.join_chat("NOBITA_SUPPORT")
                 await self.seven.join_chat(config.SUPPORT_CHANNEL)
             except:
                 pass
@@ -210,3 +210,4 @@ class Userbot(Client):
             LOGGER(__name__).info(f"Assistant Seven Started as {self.seven.name}")
 
             
+
