@@ -22,7 +22,7 @@ def time_to_seconds(time_str):
 
 
 # API Configuration
-API_BASE_URL = "https://youtubify.me"
+API_BASE_URL = ""
 API_KEY = "b8e7dc72a27d42719e73b46901ff24ad"
 ENABLE_STREAMING = True
 MAX_DOWNLOAD_SIZE_MB = 48
@@ -408,3 +408,4 @@ class YouTubeAPI:
         else:
             f = await api_download_audio()
             return (f, True)
+
